@@ -1,10 +1,30 @@
 {
+    // ========== Pytest 配置 ==========
     "python.testing.pytestArgs": [
-        "tests"
+        "tests",
+        "-v"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
+
+    // ========== Python 环境配置 ==========
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+
+    // ========== 终端配置 ==========
+    // 在集成终端中自动激活环境
+    "python.terminal.activateEnvironment": true,
+
+    // ========== 环境变量配置 ==========
+    // 将项目根目录添加到 PYTHONPATH
+    "terminal.integrated.env.osx": {
+        "PYTHONPATH": "${workspaceFolder}"
+    },
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "${workspaceFolder}"
+    },
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}"
+    }
 }

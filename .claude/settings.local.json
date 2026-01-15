@@ -19,7 +19,9 @@
       "Bash(allure generate:*)",
       "Bash(cat:*)",
       "Bash(ls:*)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(python scripts/check_auth_state.py:*)",
+      "Bash(python -m pytest:*)"
     ],
     "deny": [],
     "ask": []

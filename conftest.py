@@ -1,19 +1,33 @@
+import sys
+from pathlib import Path
+
+# ========== 重要：将项目根目录添加到 Python 路径 ==========
+# 这样可以在 debug 模式下直接运行测试文件，也能正确导入模块
+PROJECT_ROOT = Path(__file__).parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import allure
 import pytest
 from playwright.sync_api import Browser
-from pathlib import Path
 from config.config import HEADLESS, BASE_URL
 import time
 import os
 from datetime import datetime
 
 
+# ========== 认证状态管理配置 ==========
 # Storage state 文件路径
 STORAGE_STATE_PATH = Path(__file__).parent / "test_data" / "auth_state.json"
 
 # 认证状态有效期（秒），超过此时间将重新登录
 # 可根据实际 token 过期时间调整，默认 1 小时
 AUTH_STATE_EXPIRY = 60 * 60  # 1 hour
+
+# 是否启用认证状态在线验证（会打开一个临时页面验证 cookies）
+# True: 每次都验证（更安全，但会多打开一次页面）
+# False: 只检查文件存在性和过期时间（更快，推荐）
+ENABLE_AUTH_VALIDATION = False
 
 # Trace 文件保存路径
 TRACE_DIR = Path(__file__).parent / "test-results"
@@ -46,24 +60,31 @@ def _is_auth_state_valid(browser: Browser) -> bool:
     通过尝试访问需要认证的页面并检查关键元素来判断
     """
     if not STORAGE_STATE_PATH.exists():
+        print("ℹ 认证状态文件不存在")
         return False
 
     try:
+        print("ℹ 开始验证认证状态...")
         # 创建使用保存状态的临时上下文
         context = browser.new_context(storage_state=str(STORAGE_STATE_PATH))
         page = context.new_page()
 
         # 访问主页
-        page.goto(BASE_URL, timeout=10000)
-        page.wait_for_timeout(1000)
+        print(f"ℹ 访问主页: {BASE_URL}")
+        page.goto(BASE_URL, timeout=15000)  # 增加超时时间到 15 秒
+        page.wait_for_timeout(2000)  # 增加等待时间到 2 秒
 
         # 检查是否存在登录后才有的元素（如"用药记录"按钮）
         # 如果找到该元素，说明认证有效；否则可能跳转到了登录页
         try:
-            page.wait_for_selector("button:has-text('用药记录')", timeout=5000)
+            print("ℹ 检查登录状态（查找'用药记录'按钮）...")
+            page.wait_for_selector("button:has-text('用药记录')", timeout=10000)  # 增加超时到 10 秒
+            print("✓ 认证状态有效，找到'用药记录'按钮")
             context.close()
             return True
-        except:
+        except Exception as e:
+            print(f"✗ 未找到'用药记录'按钮: {e}")
+            print(f"  当前 URL: {page.url}")
             context.close()
             return False
 
@@ -76,6 +97,8 @@ def _perform_login(browser: Browser) -> Path:
     """
     执行登录并保存认证状态
     """
+    print("\n🔐 执行登录流程...")
+
     # 创建临时上下文进行登录
     context = browser.new_context()
     page = context.new_page()
@@ -87,23 +110,61 @@ def _perform_login(browser: Browser) -> Path:
 
         login_data = DataLoader.get_test_data("login/login_data.yaml", "valid_user")
         login_page = LoginPage(page)
+
+        print(f"ℹ️  访问登录页面...")
         login_page.open()
+
+        print(f"ℹ️  输入用户名: {login_data['username']}")
+        print(f"ℹ️  输入密码: {'*' * len(login_data['password'])}")
         login_page.login(login_data["username"], login_data["password"])
 
         # 等待登录成功 - 等待特定元素出现确保登录完成
         try:
-            page.wait_for_selector("button:has-text('用药记录')", timeout=5000)
-            print("✓ 登录成功，已检测到主页元素")
-        except:
-            print("⚠ 警告：未检测到登录后的主页元素，但继续保存状态")
+            print("ℹ️  等待登录完成（查找'用药记录'按钮）...")
+            page.wait_for_selector("button:has-text('用药记录')", timeout=10000)
+            print("✅ 登录成功，已检测到主页元素")
+        except Exception as e:
+            print(f"⚠️  警告：未检测到登录后的主页元素: {e}")
+            print(f"   当前 URL: {page.url}")
+            print("   继续等待 2 秒...")
             page.wait_for_timeout(2000)
+
+        # 额外等待，确保所有 cookies 都设置完成
+        print("ℹ️  等待 cookies 设置...")
+        page.wait_for_timeout(1000)
+
+        # 保存认证状态前，检查 cookies
+        cookies = context.cookies()
+        print(f"ℹ️  当前 Cookies 数量: {len(cookies)}")
+
+        if len(cookies) == 0:
+            print("⚠️  警告: 登录后没有 cookies，可能登录失败！")
+            print(f"   当前 URL: {page.url}")
+            # 截图调试
+            screenshot_path = STORAGE_STATE_PATH.parent / "login_debug.png"
+            page.screenshot(path=str(screenshot_path))
+            print(f"   已保存调试截图: {screenshot_path}")
+        else:
+            # 显示部分 cookies 信息
+            print(f"ℹ️  Cookies 示例:")
+            for cookie in cookies[:3]:  # 只显示前3个
+                print(f"      - {cookie.get('name')}: {cookie.get('domain')}")
+            if len(cookies) > 3:
+                print(f"      ... 还有 {len(cookies) - 3} 个")
 
         # 保存认证状态
         STORAGE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         context.storage_state(path=str(STORAGE_STATE_PATH))
 
-        print(f"✓ 登录状态已保存到: {STORAGE_STATE_PATH}")
+        print(f"✅ 登录状态已保存到: {STORAGE_STATE_PATH}")
 
+    except Exception as e:
+        print(f"❌ 登录失败: {e}")
+        # 截图调试
+        screenshot_path = STORAGE_STATE_PATH.parent / "login_error.png"
+        page.screenshot(path=str(screenshot_path))
+        print(f"   已保存错误截图: {screenshot_path}")
+        raise
     finally:
         context.close()
 
@@ -119,34 +180,51 @@ def authenticated_state(browser: Browser) -> Path:
     自动检测功能：
     1. 检查文件是否存在
     2. 检查文件是否过期（基于修改时间）
-    3. 验证认证状态是否有效（尝试访问需要认证的页面）
+    3. [可选] 验证认证状态是否有效（尝试访问需要认证的页面）
     4. 如果无效或过期，自动重新登录
     """
+    print("\n" + "="*60)
+    print("📋 认证状态检查开始")
+    print("="*60)
+
     need_refresh = False
 
     # 检查1：文件是否存在
     if not STORAGE_STATE_PATH.exists():
-        print("ℹ 认证状态文件不存在，需要登录")
+        print("❌ 认证状态文件不存在，需要登录")
         need_refresh = True
 
     # 检查2：文件是否过期（基于修改时间）
     elif time.time() - os.path.getmtime(STORAGE_STATE_PATH) > AUTH_STATE_EXPIRY:
-        print(f"ℹ 认证状态文件已过期（超过 {AUTH_STATE_EXPIRY/3600} 小时），需要重新登录")
+        elapsed_hours = (time.time() - os.path.getmtime(STORAGE_STATE_PATH)) / 3600
+        print(f"⏰ 认证状态文件已过期（已存在 {elapsed_hours:.1f} 小时，有效期 {AUTH_STATE_EXPIRY/3600} 小时）")
         need_refresh = True
 
-    # 检查3：验证认证状态是否有效
-    elif not _is_auth_state_valid(browser):
-        print("ℹ 认证状态已失效，需要重新登录")
-        need_refresh = True
+    # 检查3：[可选] 验证认证状态是否有效
+    elif ENABLE_AUTH_VALIDATION:
+        print("ℹ️  启用在线验证（会打开临时页面验证 cookies）")
+        if not _is_auth_state_valid(browser):
+            print("❌ 认证状态已失效，需要重新登录")
+            need_refresh = True
+        else:
+            file_age_minutes = (time.time() - os.path.getmtime(STORAGE_STATE_PATH)) / 60
+            print(f"✅ 使用现有有效的认证状态（文件创建于 {file_age_minutes:.1f} 分钟前）")
     else:
-        print("✓ 使用现有有效的认证状态")
+        # 跳过在线验证，直接使用文件
+        file_age_minutes = (time.time() - os.path.getmtime(STORAGE_STATE_PATH)) / 60
+        print(f"✅ 使用现有认证状态（文件创建于 {file_age_minutes:.1f} 分钟前）")
+        print("ℹ️  跳过在线验证（ENABLE_AUTH_VALIDATION=False）")
 
     # 如果需要刷新，删除旧文件并重新登录
     if need_refresh:
+        print("\n🔄 开始重新登录...")
         if STORAGE_STATE_PATH.exists():
             STORAGE_STATE_PATH.unlink()
-        return _perform_login(browser)
+        result = _perform_login(browser)
+        print("="*60)
+        return result
 
+    print("="*60 + "\n")
     return STORAGE_STATE_PATH
 
 
