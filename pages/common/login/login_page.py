@@ -22,6 +22,4 @@ class LoginPage(BasePage):
         return self.get_text(self.ERROR_MESSAGE)
     
     def get_success_message(self) -> str:
-        return self.get_text(self.LOGIN_SUCCESS)
-    
-    
+        return self.get_text(self.LOGIN_SUCCESS)    

@@ -37,5 +37,4 @@ class TestLogin:
         login_page.login(invalid_data["username"], invalid_data["password"])
         # page.wait_for_timeout(5000)
         error = login_page.get_error_message()
-        assertion.assert_contains(error, invalid_data["expected_error"], "登录失败错误消息验证")
-        
+        assertion.assert_contains(error, invalid_data["expected_error"], "登录失败错误消息验证")        

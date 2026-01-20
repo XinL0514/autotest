@@ -245,3 +245,61 @@ class Assertion:
                 attachment_type=allure.attachment_type.TEXT
             )
             raise AssertionError(f"检查元素可见性时出错: {str(e)}")
+    
+    @allure.step("断言元素选中: {selector}")
+    def assert_is_checked(self, page, selector: str, message: str = ""):
+        """断言页面元素选中"""
+        try:
+            is_checked = page.is_checked(selector)
+            assert  is_checked, message or f"元素 '{selector}' 未选中"
+            self.logger.info(f"✓ 断言成功: 元素 '{selector}' 选中")
+            allure.attach(
+                f"选择器: {selector}\n选中: 是\n结果: 通过",
+                name="断言结果",
+                attachment_type=allure.attachment_type.TEXT
+            )
+        except AssertionError as e:
+            self.logger.error(f"✗ 断言失败: 元素 '{selector}' 未选中")
+            allure.attach(
+                f"选择器: {selector}\n选中: 否\n结果: 失败\n{message}",
+                name="断言失败详情",
+                attachment_type=allure.attachment_type.TEXT
+            )
+            raise AssertionError(str(e))
+        except Exception as e:
+            self.logger.error(f"✗ 断言失败: 检查元素 '{selector}' 时出错 - {str(e)}")
+            allure.attach(
+                f"选择器: {selector}\n错误: {str(e)}\n结果: 失败",
+                name="断言失败详情",
+                attachment_type=allure.attachment_type.TEXT
+            )
+            raise AssertionError(f"检查元素选中时出错: {str(e)}")
+        
+    @allure.step("断言元素未选中: {selector}")
+    def assert_is_unchecked(self, page, selector: str, message: str = ""):
+        """断言页面元素未选中"""
+        try:
+            is_checked = page.is_checked(selector)
+            assert not is_checked, message or f"元素 '{selector}' 选中"
+            self.logger.info(f"✓ 断言成功: 元素 '{selector}' 未选中")
+            allure.attach(
+                f"选择器: {selector}\n选中: 否\n结果: 通过",
+                name="断言结果",
+                attachment_type=allure.attachment_type.TEXT
+            )
+        except AssertionError as e:
+            self.logger.error(f"✗ 断言失败: 元素 '{selector}' 选中")
+            allure.attach(
+                f"选择器: {selector}\n选中: 是\n结果: 失败\n{message}",
+                name="断言失败详情",
+                attachment_type=allure.attachment_type.TEXT
+            )
+            raise AssertionError(str(e))
+        except Exception as e:
+            self.logger.error(f"✗ 断言失败: 检查元素 '{selector}' 时出错 - {str(e)}")
+            allure.attach(
+                f"选择器: {selector}\n错误: {str(e)}\n结果: 失败",
+                name="断言失败详情",
+                attachment_type=allure.attachment_type.TEXT
+            )
+            raise AssertionError(f"检查元素未选中时出错: {str(e)}")

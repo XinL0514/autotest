@@ -28,38 +28,23 @@ class MarPage(BasePage):
         "role", ("button", "添加用药记录"),
         desc="添加用药记录按钮"
     )
+    
+    
 
     # 使用 placeholder 定位输入框
-    MAR_NAME_INPUT = Element(
-        "placeholder", "药物名称",
-        desc="药物名称输入框"
-    )
+    MAR_NAME_INPUT = Element("role", ("textbox", "药物名称"), desc="药物名称输入框")
 
-    MAR_DOSAGE_INPUT = Element(
-        "placeholder", "剂量",
-        desc="剂量输入框"
-    )
+    MAR_DOSAGE_INPUT = Element("role", ("textbox", "剂量"), desc="剂量输入框")
+    
 
-    MAR_FREQUENCY_INPUT = Element(
-        "placeholder", "用药频率",
-        desc="用药频率输入框"
-    )
+    MAR_FREQUENCY_INPUT = Element("role", ("textbox", "用药频率"), desc="用药频率输入框")
 
-    MAR_PURPOSE_INPUT = Element(
-        "placeholder", "用药目的",
-        desc="用药目的输入框"
-    )
+    MAR_PURPOSE_INPUT = Element("role", ("textbox", "用药目的"), desc="用药目的输入框")
 
-    MAR_SIDE_EFFECTS_INPUT = Element(
-        "placeholder", "副作用",
-        desc="副作用输入框"
-    )
+    MAR_SIDE_EFFECTS_INPUT = Element("role", ("textbox", "副作用"), desc="副作用输入框")
 
     # 使用 label 定位复选框
-    MAR_STILL_USING_CHECKBOX = Element(
-        "label", "当前仍在使用",
-        desc="当前仍在使用复选框"
-    )
+    MAR_STILL_USING_CHECKBOX = Element("role", ("checkbox", "当前仍在使用"), desc="当前仍在使用复选框")
 
     # 使用 exact 参数精确匹配
     SAVE_MAR_BUTTON = Element(
@@ -126,7 +111,7 @@ class MarPage(BasePage):
         """点击用药记录tab按钮 - 展示新旧两种方式"""
         # 新方式（推荐）：直接传递 Element 对象
         # return self.click_and_handle_new_page(self.BUTTON_ADD_MAR_TEST_CLICK)
-        self.click(self.BUTTON_ADD_MAR_TEST_CLICK)
+        self.click(self.MAR_TAB_BUTTON)
         # self.click(self.BUTTON_ADD_MAR_TEST)
         # return self.page
     def test_fun(self):
@@ -151,32 +136,14 @@ class MarPage(BasePage):
         """
         # 点击添加按钮
         self.click(self.ADD_MAR_BUTTON)
-
         # 填充表单（自动使用元素描述信息）
         self.fill(self.MAR_NAME_INPUT, name)
-
-        if dosage:
-            self.fill(self.MAR_DOSAGE_INPUT, dosage)
-
-        if frequency:
-            self.fill(self.MAR_FREQUENCY_INPUT, frequency)
-
-        if purpose:
-            self.fill(self.MAR_PURPOSE_INPUT, purpose)
-
-        if side_effects:
-            self.fill(self.MAR_SIDE_EFFECTS_INPUT, side_effects)
-
-        # 处理复选框
-        if still_using:
-            # 检查是否已选中
-            if not self.is_checked(self.MAR_STILL_USING_CHECKBOX):
-                self.check(self.MAR_STILL_USING_CHECKBOX)
-        else:
-            # 确保未选中
-            if self.is_checked(self.MAR_STILL_USING_CHECKBOX):
-                self.uncheck(self.MAR_STILL_USING_CHECKBOX)
-
-        # 保存
-        self.click(self.SAVE_MAR_BUTTON)
+        self.fill(self.MAR_DOSAGE_INPUT, dosage)
+        self.fill(self.MAR_FREQUENCY_INPUT, frequency)
+        self.fill(self.MAR_PURPOSE_INPUT, purpose)
+        self.fill(self.MAR_SIDE_EFFECTS_INPUT, side_effects)
+        
+    def assert_still_using_checkbox(self):
+        # self.click(self.MAR_STILL_USING_CHECKBOX)
+        return self.is_checked(self.MAR_STILL_USING_CHECKBOX)
 

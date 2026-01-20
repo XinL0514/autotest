@@ -21,7 +21,11 @@
       "Bash(ls:*)",
       "Bash(xargs cat:*)",
       "Bash(python scripts/check_auth_state.py:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(git -C /Users/hantongxue/Desktop/work/autotest log --oneline -20)",
+      "Bash(grep:*)",
+      "Bash(git -C /Users/hantongxue/Desktop/work/autotest status)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

@@ -25,6 +25,9 @@ wheels/
 venv/
 ENV/
 env/
+.conda/
+*.egg
+*.egg-info/
 
 # Pytest
 .pytest_cache/
@@ -77,3 +80,13 @@ traces/
 
 # Authentication state (contains sensitive login data)
 test_data/auth_state.json
+
+# Backup files
+*.backup
+*.bak
+*.old
+*~
+
+# Debug screenshots
+test_data/*_debug.png
+test_data/*_error.png
