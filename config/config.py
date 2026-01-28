@@ -1,5 +1,5 @@
 # 测试环境配置
-BASE_URL = "http://101.200.193.143/"
+BASE_URL = "https://sahitest.com/demo/index.htm"
 
 # 超时时间(毫秒)
 TIMEOUT = 30000

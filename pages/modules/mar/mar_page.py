@@ -47,16 +47,18 @@ class MarPage(BasePage):
     MAR_STILL_USING_CHECKBOX = Element("role", ("checkbox", "当前仍在使用"), desc="当前仍在使用复选框")
 
     # 使用 exact 参数精确匹配
-    SAVE_MAR_BUTTON = Element(
-        "role", ("button", "保存"),
-        desc="保存按钮",
-        exact=True  # 精确匹配，避免匹配到 "保存并继续"
-    )
+    SAVE_MAR_BUTTON = Element("role", ("button", "保存"), desc="保存按钮", exact=True)  # 精确匹配，避免匹配到 "保存并继续"
+    
+    MEDICATION_NAME = Element("role", ("heading", "test"), desc="药物名称", nth=-1)
 
-    CANCEL_BUTTON = Element(
-        "role", ("button", "取消"),
-        desc="取消按钮"
-    )
+    CANCEL_BUTTON = Element("role", ("button", "取消"), desc="取消按钮")
+    
+    DELETE_LAST_MEDICATION_BUTTON = Element("role", ("button", "删除"), desc="删除药物按钮--最后一个", last=True)
+    DELETE_FIRST_MEDICATION_BUTTON = Element("role", ("button", "删除"), desc="删除药物按钮--第一个", first=True)
+    DELETE_SUCCESS_BUTTON = Element("text", "用药记录删除成功", desc="删除成功按钮", exact=True)
+    
+    DIALOG_DELETE_BUTTON = (("button", "确定"))
+    DIALOG_CANCEL_BUTTON = (("button", "取消"))
 
     # ========== 高级用法：使用 filter 和 nth ==========
 
@@ -123,7 +125,7 @@ class MarPage(BasePage):
         # self.page.wait_for_timeout(3000)
 
     def add_medication_record(self, name: str, dosage: str = "", frequency: str = "",
-                             purpose: str = "", side_effects: str = "", still_using: bool = False):
+                             purpose: str = "", side_effects: str = ""):
         """添加用药记录 - 展示 Element 配置类的完整使用
 
         Args:
@@ -142,8 +144,22 @@ class MarPage(BasePage):
         self.fill(self.MAR_FREQUENCY_INPUT, frequency)
         self.fill(self.MAR_PURPOSE_INPUT, purpose)
         self.fill(self.MAR_SIDE_EFFECTS_INPUT, side_effects)
-        
-    def assert_still_using_checkbox(self):
-        # self.click(self.MAR_STILL_USING_CHECKBOX)
         return self.is_checked(self.MAR_STILL_USING_CHECKBOX)
+        
+    def click_save_btn(self):
+        self.click(self.SAVE_MAR_BUTTON)
+        
+    def get_medication_name(self):
+        return self.get_text(self.MEDICATION_NAME)
+    
+    def delete_last_medication(self):
+        # self.click(self.DELETE_LAST_MEDICATION_BUTTON)
+        self.click_and_accept_dialog(self.DELETE_LAST_MEDICATION_BUTTON)
+        return self.is_visible(self.DELETE_SUCCESS_BUTTON)
+        
+    def delete_first_medication(self):
+        self.click(self.DELETE_FIRST_MEDICATION_BUTTON)
+        self.click_and_accept_dialog(self.DIALOG_DELETE_BUTTON)
+        
+        
 
