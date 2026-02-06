@@ -17,7 +17,7 @@ class UploadPage(BasePage):
     
     def click_upload_file_input(self):
         # self.click(self.UPLOADFILEINPUT)
-        self.file_filechooser(self.UPLOADFILEINPUT, "/Users/hantongxue/Downloads/generat_sql.py")
+        self.file_choose_file(self.UPLOADFILEINPUT, "/Users/hantongxue/Downloads/generat_sql.py")
         
 
     # def get_test_frame_text(self):

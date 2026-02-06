@@ -40,6 +40,7 @@ allure-report/
 # Logs
 logs/
 *.log
+docs/
 
 # IDE - VSCode / Cursor
 # Allow team-shared configs but exclude personal settings

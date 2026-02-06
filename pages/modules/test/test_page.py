@@ -51,13 +51,13 @@ class TestPage(BasePage):
     
     def click_upload_file_input(self):
         # self.click(self.UPLOADFILEINPUT)
-        self.file_filechooser(self.UPLOADFILEINPUT, "/Users/hantongxue/Downloads/generat_sql.py")
+        self.file_choose_file(self.UPLOADFILEINPUT, "/Users/hantongxue/Downloads/generat_sql.py")
         
     def click_test_jump_button(self):
         self.click(self.TESTJUMPBTN)
         
     def jump_to_new_page(self):
-        new_page = self.click_and_handle_new_page(self.JUMPBTN).hover
+        new_page = self.click_and_handle_new_page(self.JUMPBTN)
         return new_page
     
     def verify_page(self):
