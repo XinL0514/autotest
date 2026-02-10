@@ -12,10 +12,12 @@
     "python-envs.defaultPackageManager": "ms-python.python:pip",
     "python-envs.pythonProjects": [],
     "python.useEnvironmentsExtension": true,
+    "python.terminal.activateEnvironment": false,
+
 
     // ========== 终端配置 ==========
     // 在集成终端中自动激活环境
-    "python.terminal.activateEnvironment": true,
+    
 
     // ========== 环境变量配置 ==========
     // 将项目根目录添加到 PYTHONPATH
