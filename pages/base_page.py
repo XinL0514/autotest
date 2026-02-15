@@ -412,6 +412,67 @@ class BasePage:
         self._get_locator(locator).uncheck(timeout=final_timeout)
         self.logger.info(f"成功取消选中元素: {loc_desc}")
 
+    # ========== 下拉选择操作 ==========
+
+    @allure.step("选择下拉选项")
+    @ExceptionHandler.handle_playwright_exception("选择下拉选项")
+    def select_option(self, locator: Union[str, Tuple[str, str], Element],
+                      value: str = None, label: str = None, index: int = None, timeout: int = None) -> list:
+        """选择 <select> 下拉框的选项 - 支持按 value、label 或 index 选择
+
+        适用场景：
+        - 原生 HTML <select> 元素
+        - 支持三种选择方式，按优先级使用：label > value > index
+
+        Args:
+            locator: 定位器，支持：
+                - Element: Element("css", "select#city", desc="城市下拉框")
+                - CSS: "select#city" 或 ".select-field"
+                - XPath: "//select[@name='city']"
+                - Role: ("combobox", "城市")
+            value: 按 option 的 value 属性选择
+            label: 按 option 的显示文本选择
+            index: 按 option 的索引选择（从 0 开始）
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
+
+        Returns:
+            被选中的 option 的 value 列表
+
+        Examples:
+            # 按显示文本选择
+            self.select_option("select#city", label="北京")
+
+            # 按 value 属性选择
+            self.select_option("select#city", value="beijing")
+
+            # 按索引选择（第 3 个选项）
+            self.select_option("select#city", index=2)
+
+            # 使用 Element 对象
+            CITY_SELECT = Element("css", "select#city", desc="城市下拉框")
+            self.select_option(CITY_SELECT, label="上海")
+        """
+        loc_desc = self._get_locator_description(locator)
+
+        element = locator if isinstance(locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, element)
+
+        # 按优先级构建选择参数
+        if label is not None:
+            self.logger.info(f"尝试选择下拉选项: {loc_desc}, label={label}")
+            result = self._get_locator(locator).select_option(label=label, timeout=final_timeout)
+        elif value is not None:
+            self.logger.info(f"尝试选择下拉选项: {loc_desc}, value={value}")
+            result = self._get_locator(locator).select_option(value=value, timeout=final_timeout)
+        elif index is not None:
+            self.logger.info(f"尝试选择下拉选项: {loc_desc}, index={index}")
+            result = self._get_locator(locator).select_option(index=index, timeout=final_timeout)
+        else:
+            raise ValueError("必须提供 value、label 或 index 中的至少一个参数")
+
+        self.logger.info(f"成功选择下拉选项: {loc_desc}, 选中值: {result}")
+        return result
+
     # ========== 文件上传操作 ==========
 
     @allure.step("上传文件")
