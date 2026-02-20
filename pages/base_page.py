@@ -345,6 +345,111 @@ class BasePage:
         self._get_locator(locator).wait_for(state="visible", timeout=final_timeout)
         self.logger.info(f"元素已出现: {loc_desc}")
 
+    @allure.step("双击元素")
+    @ExceptionHandler.handle_playwright_exception("双击元素")
+    def double_click(self, locator: Union[str, Tuple[str, str], Element], timeout: int = None):
+        """智能双击元素 - 支持 CSS/XPath 字符串、Role 元组或 Element 对象
+
+        Args:
+            locator: 定位器，支持：
+                - Element: Element("css", ".editable-cell", desc="可编辑单元格")
+                - CSS: ".editable-cell" 或 "#item"
+                - XPath: "//td[@class='editable']"
+                - Role: ("cell", "名称")
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
+        """
+        loc_desc = self._get_locator_description(locator)
+        self.logger.info(f"尝试双击元素: {loc_desc}")
+
+        element = locator if isinstance(locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, element)
+
+        self._get_locator(locator).dblclick(timeout=final_timeout)
+        self.logger.info(f"成功双击元素: {loc_desc}")
+
+    @allure.step("右键点击元素")
+    @ExceptionHandler.handle_playwright_exception("右键点击元素")
+    def right_click(self, locator: Union[str, Tuple[str, str], Element], timeout: int = None):
+        """智能右键点击元素 - 支持 CSS/XPath 字符串、Role 元组或 Element 对象
+
+        适用场景：
+        - 触发右键上下文菜单
+        - 自定义右键菜单操作
+
+        Args:
+            locator: 定位器，支持：
+                - Element: Element("css", ".file-item", desc="文件项")
+                - CSS: ".file-item" 或 "#target"
+                - XPath: "//div[@class='item']"
+                - Role: ("row", "文件名")
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
+        """
+        loc_desc = self._get_locator_description(locator)
+        self.logger.info(f"尝试右键点击元素: {loc_desc}")
+
+        element = locator if isinstance(locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, element)
+
+        self._get_locator(locator).click(button="right", timeout=final_timeout)
+        self.logger.info(f"成功右键点击元素: {loc_desc}")
+
+    @allure.step("获取元素属性")
+    @ExceptionHandler.handle_playwright_exception("获取元素属性")
+    def get_attribute(self, locator: Union[str, Tuple[str, str], Element], attribute: str, timeout: int = None) -> Optional[str]:
+        """智能获取元素属性值 - 支持 CSS/XPath 字符串、Role 元组或 Element 对象
+
+        Args:
+            locator: 定位器，支持：
+                - Element: Element("css", "img.avatar", desc="头像图片")
+                - CSS: "img.avatar" 或 "#link"
+                - XPath: "//a[@class='link']"
+                - Role: ("link", "详情")
+            attribute: 要获取的属性名（如 "href"、"src"、"class"、"data-id" 等）
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
+
+        Returns:
+            属性值字符串，属性不存在时返回 None
+        """
+        loc_desc = self._get_locator_description(locator)
+        self.logger.info(f"尝试获取元素属性: {loc_desc}, 属性名: {attribute}")
+
+        element = locator if isinstance(locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, element)
+
+        value = self._get_locator(locator).get_attribute(attribute, timeout=final_timeout)
+        self.logger.info(f"成功获取属性: {loc_desc}, {attribute}={value}")
+        return value
+
+    @allure.step("获取输入框的值")
+    @ExceptionHandler.handle_playwright_exception("获取输入框的值")
+    def get_input_value(self, locator: Union[str, Tuple[str, str], Element], timeout: int = None) -> str:
+        """智能获取输入框当前值 - 支持 CSS/XPath 字符串、Role 元组或 Element 对象
+
+        与 get_text 的区别：
+        - get_text: 获取元素的 textContent（适用于 div、span 等）
+        - get_input_value: 获取 input/textarea 的 value（适用于表单元素）
+
+        Args:
+            locator: 定位器，支持：
+                - Element: Element("placeholder", "请输入用户名", desc="用户名输入框")
+                - CSS: "#username" 或 ".input-field"
+                - XPath: "//input[@name='username']"
+                - Role: ("textbox", "用户名")
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
+
+        Returns:
+            输入框的当前值
+        """
+        loc_desc = self._get_locator_description(locator)
+        self.logger.info(f"尝试获取输入框的值: {loc_desc}")
+
+        element = locator if isinstance(locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, element)
+
+        value = self._get_locator(locator).input_value(timeout=final_timeout)
+        self.logger.info(f"成功获取输入框的值: {loc_desc}, 值: {value}")
+        return value
+
     @allure.step("检查元素是否选中")
     @ExceptionHandler.handle_playwright_exception("检查元素是否选中", return_on_error=False, raise_assertion=False)
     def is_checked(self, locator: Union[str, Tuple[str, str], Element]) -> bool:
@@ -472,6 +577,68 @@ class BasePage:
 
         self.logger.info(f"成功选择下拉选项: {loc_desc}, 选中值: {result}")
         return result
+
+    @allure.step("选择自定义下拉选项")
+    @ExceptionHandler.handle_playwright_exception("选择自定义下拉选项")
+    def click_select_option(self, trigger_locator: Union[str, Tuple[str, str], Element],
+                            option_locator: Union[str, Tuple[str, str], Element],
+                            option_text: str = None, timeout: int = None):
+        """点击自定义下拉组件并选择选项（适用于 antd Select、Element UI Select 等）
+
+        适用场景：
+        - 非原生 <select> 的自定义下拉组件
+        - antd Select、Element UI Select、自定义 dropdown 等
+        - 需要先点击触发器展开下拉面板，再点击选项的场景
+
+        操作流程：点击触发器 → 等待下拉面板出现 → 点击目标选项
+
+        Args:
+            trigger_locator: 下拉触发器的定位器（点击后展开下拉面板的元素）
+            option_locator: 目标选项的定位器，两种用法：
+                - 直接定位选项: 传入能精确定位到目标选项的定位器
+                - 配合 option_text: 传入选项列表容器的定位器，通过 option_text 匹配文本
+            option_text: 可选，选项的显示文本。提供时会在 option_locator 的范围内通过文本匹配选项
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
+
+        Examples:
+            # 方式一：直接定位选项（推荐，最精确）
+            CITY_SELECT = Element("css", ".ant-select", desc="城市下拉框")
+            BEIJING_OPTION = Element("css", ".ant-select-item[title='北京']", desc="北京选项")
+            self.click_select_option(CITY_SELECT, BEIJING_OPTION)
+
+            # 方式二：通过文本匹配选项
+            CITY_SELECT = Element("css", ".ant-select", desc="城市下拉框")
+            DROPDOWN = Element("css", ".ant-select-dropdown", desc="下拉面板")
+            self.click_select_option(CITY_SELECT, DROPDOWN, option_text="北京")
+
+            # 方式三：使用 Role 定位
+            self.click_select_option(("combobox", "城市"), ("option", "北京"))
+        """
+        trigger_desc = self._get_locator_description(trigger_locator)
+        option_desc = self._get_locator_description(option_locator)
+
+        trigger_element = trigger_locator if isinstance(trigger_locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, trigger_element)
+
+        # 1. 点击触发器展开下拉面板
+        self.logger.info(f"点击下拉触发器: {trigger_desc}")
+        self._get_locator(trigger_locator).click(timeout=final_timeout)
+
+        # 2. 等待下拉面板/选项出现
+        option_element = option_locator if isinstance(option_locator, Element) else None
+        option_timeout = self._resolve_timeout(timeout, option_element)
+
+        option_loc = self._get_locator(option_locator)
+        option_loc.wait_for(state="visible", timeout=option_timeout)
+
+        # 3. 点击目标选项
+        if option_text:
+            self.logger.info(f"在 {option_desc} 中查找文本: {option_text}")
+            option_loc.get_by_text(option_text, exact=True).click(timeout=option_timeout)
+        else:
+            option_loc.click(timeout=option_timeout)
+
+        self.logger.info(f"成功选择自定义下拉选项: {trigger_desc} -> {option_text or option_desc}")
 
     # ========== 文件上传操作 ==========
 
@@ -1279,7 +1446,8 @@ class BasePage:
     @allure.step("使用鼠标操作拖拽元素")
     @ExceptionHandler.handle_playwright_exception("使用鼠标拖拽元素")
     def drag_by_mouse(self, source_locator: Union[str, Tuple[str, str], Element],
-                      target_locator: Union[str, Tuple[str, str], Element]):
+                      target_locator: Union[str, Tuple[str, str], Element],
+                      timeout: int = None):
         """使用鼠标操作进行拖拽（更精细的控制）
 
         适用场景：
@@ -1290,6 +1458,7 @@ class BasePage:
         Args:
             source_locator: 源元素定位器（要拖拽的元素）
             target_locator: 目标元素定位器（拖拽到的位置）
+            timeout: 可选的超时时间（毫秒），优先级：timeout 参数 > Element.timeout > self.timeout
 
         Examples:
             # 使用鼠标拖拽
@@ -1304,9 +1473,15 @@ class BasePage:
         target_desc = self._get_locator_description(target_locator)
         self.logger.info(f"使用鼠标拖拽元素: {source_desc} -> {target_desc}")
 
-        # 获取元素位置
+        # 解析 timeout 优先级（优先使用 source 的 timeout）
+        element = source_locator if isinstance(source_locator, Element) else None
+        final_timeout = self._resolve_timeout(timeout, element)
+
+        # 获取元素并等待可见
         source = self._get_locator(source_locator)
         target = self._get_locator(target_locator)
+        source.wait_for(state="visible", timeout=final_timeout)
+        target.wait_for(state="visible", timeout=final_timeout)
 
         source_box = source.bounding_box()
         target_box = target.bounding_box()
