@@ -1,24 +1,18 @@
 import allure
-import pytest
 from playwright.sync_api import Page
 from pages.modules.test.test_page import TestPage
-from pages.common.uploadfile.upload_page import UploadPage
 from pages.modules.test.jump_page import JumpPage
-from utils.data_loader import DataLoader
 from utils.logger import Logger
-from utils.assertion import Assertion
-from utils.time_utils import timeStamp
-logger = Logger.get_logger("TestMar")
-assertion = Assertion("TestMar")
+logger = Logger.get_logger("TestJumping")
 
 
-@allure.feature("用药记录")
-class TestMar:
-    @allure.story("用药记录")
-    @allure.title("测试点击用药记录tab按钮")
-    @allure.description("点击用药记录tab按钮，验证用药记录页面是否显示")
+@allure.feature("窗口跳转")
+class TestJumping:
+    @allure.story("新窗口")
+    @allure.title("测试点击按钮打开新窗口")
+    @allure.description("点击 Window Open Test 后，验证新窗口可正常操作")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_click_mar_tab(self, page: Page):
+    def test_open_new_window(self, page: Page):
         test_page = TestPage(page)
         test_page.open()
         new_page = test_page.jump_to_new_page()

@@ -81,6 +81,7 @@ traces/
 
 # Authentication state (contains sensitive login data)
 test_data/auth_state.json
+test_data/auth_state_*.json
 
 # Backup files
 *.backup
