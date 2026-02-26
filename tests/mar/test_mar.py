@@ -25,7 +25,7 @@ class TestMar:
         checked = mar_page.add_medication_record(mar_name, mar_data["mar_dosage"], mar_data["mar_frequency"], mar_data["mar_purpose"], mar_data["mar_side_effects"])
         assertion.assert_true(checked, "当前还在使用是否是选中")
         mar_page.click_save_btn()
-        mar_page.page.wait_for_timeout(500)
+        mar_page.wait_for_selector(mar_page.MEDICATION_NAME, timeout=5000)
         medication_name = mar_page.get_medication_name()
         assertion.assert_equal(medication_name, mar_name, "药物名称是否正确")
         deleted_success_dialog = mar_page.delete_last_medication()

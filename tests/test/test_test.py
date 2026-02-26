@@ -27,7 +27,7 @@ class TestMar:
         # test_page.frame_click_link()
         # text = test_page.get_test_verify_button_text()
         # logger.info(f"按钮文本: {text}")
-        test_page.page.wait_for_timeout(5000)
+        test_page.page.wait_for_load_state("domcontentloaded")
         # pages = test_page.get_page_by_url()
         # logger.info(f"页面数量: {len(pages)}")
         # test_page.click_test_frame_button()

@@ -26,4 +26,4 @@ class TestMar:
         url = jump_page.page.url
         logger.info(f"跳转页面URL: {url}")
         jump_page.verify_page()
-        jump_page.page.wait_for_timeout(5000)
+        jump_page.page.wait_for_load_state("domcontentloaded")

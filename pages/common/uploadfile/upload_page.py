@@ -1,5 +1,5 @@
 from pages.base_page import BasePage
-from config.config import BASE_URL
+from config.config import DEFAULT_UPLOAD_FILE_NAME
 from utils.element import Element
 from utils.logger import Logger
 logger = Logger.get_logger("UploadPage")
@@ -15,9 +15,10 @@ class UploadPage(BasePage):
         new_page = self.click_and_handle_new_page(self.UPLOADFILEBTN)
         return new_page
     
-    def click_upload_file_input(self):
+    def click_upload_file_input(self, file_name: str = DEFAULT_UPLOAD_FILE_NAME):
         # self.click(self.UPLOADFILEINPUT)
-        self.file_choose_file(self.UPLOADFILEINPUT, "/Users/hantongxue/Downloads/generat_sql.py")
+        file_path = self.build_upload_file_path(file_name)
+        self.file_choose_file(self.UPLOADFILEINPUT, file_path)
         
 
     # def get_test_frame_text(self):

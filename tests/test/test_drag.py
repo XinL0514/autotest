@@ -24,4 +24,4 @@ class TestDrag:
         test_page.click_drag_page()
         drag_page = DragPage(page)
         drag_page.drag_to_btn()
-        drag_page.page.wait_for_timeout(5000)
+        drag_page.page.wait_for_load_state("domcontentloaded")

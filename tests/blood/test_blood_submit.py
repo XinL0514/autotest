@@ -30,7 +30,7 @@ class TestBloodSubmit:
             hgb=blood_data["hgb"]
         )
 
-        authenticated_page.wait_for_timeout(2000)
+        authenticated_page.wait_for_load_state("networkidle")
         logger.info("血常规数据提交成功")
         # TODO: 添加断言验证成功消息
         # success_msg = blood_page.get_success_message()

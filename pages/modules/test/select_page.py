@@ -26,7 +26,4 @@ class SelectPage(BasePage):
     def click_select_button(self):
         self.select_option(self.SELECTBTN, index=self.SELECTBTN_SELECT_ONE)
         
-    def click_test_verify_button(self):
-        self.click(self.IFRAEMCLICK)
-        
     

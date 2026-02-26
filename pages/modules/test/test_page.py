@@ -1,5 +1,5 @@
 from pages.base_page import BasePage
-from config.config import BASE_URL
+from config.config import BASE_URL, DEFAULT_UPLOAD_FILE_NAME
 from utils.element import Element
 from utils.logger import Logger
 logger = Logger.get_logger("MarPage")
@@ -7,6 +7,7 @@ logger = Logger.get_logger("MarPage")
 
 
 class TestPage(BasePage):
+    __test__ = False
     TESTFREAM = Element("text", "Frames Test", desc="Fream入口", exact=True)
     TESTIFREAM = Element("text", "IFrames Test", desc="IFream入口", exact=True)
     FRAMELOCATOR = '[src="index.htm"] >> nth=0'
@@ -49,9 +50,10 @@ class TestPage(BasePage):
     def click_switch_to_upload_file_page2(self):
         self.click(self.UPLOADFILEBTN)
     
-    def click_upload_file_input(self):
+    def click_upload_file_input(self, file_name: str = DEFAULT_UPLOAD_FILE_NAME):
         # self.click(self.UPLOADFILEINPUT)
-        self.file_choose_file(self.UPLOADFILEINPUT, "/Users/hantongxue/Downloads/generat_sql.py")
+        file_path = self.build_upload_file_path(file_name)
+        self.file_choose_file(self.UPLOADFILEINPUT, file_path)
         
     def click_test_jump_button(self):
         self.click(self.TESTJUMPBTN)

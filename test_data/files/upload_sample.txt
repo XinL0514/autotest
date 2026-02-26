@@ -1,0 +1,1 @@
+This is a sample upload file for Playwright tests.

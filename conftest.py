@@ -9,16 +9,17 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import allure
 import pytest
-from playwright.sync_api import Browser
+from playwright.sync_api import Browser, BrowserContext
 from config.config import HEADLESS, BASE_URL
 import time
 import os
+import hashlib
 from datetime import datetime
 
 
 # ========== 认证状态管理配置 ==========
-# Storage state 文件路径
-STORAGE_STATE_PATH = Path(__file__).parent / "test_data" / "auth_state.json"
+# Storage state 存储目录
+STORAGE_STATE_DIR = Path(__file__).parent / "test_data"
 
 # 认证状态有效期（秒），超过此时间将重新登录
 # 可根据实际 token 过期时间调整，默认 1 小时
@@ -32,19 +33,54 @@ ENABLE_AUTH_VALIDATION = False
 # Trace 文件保存路径
 TRACE_DIR = Path(__file__).parent / "test-results"
 
+# 登录成功后的特征元素选择器（用于验证登录状态）
+LOGIN_SUCCESS_SELECTOR = "button:has-text('用药记录')"
+
+
+def _get_storage_state_path() -> Path:
+    """
+    获取认证状态文件路径。
+    在 xdist 并行运行时按 worker 隔离，避免并发读写同一文件。
+    """
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER")
+    filename = f"auth_state_{worker_id}.json" if worker_id else "auth_state.json"
+    return STORAGE_STATE_DIR / filename
+
+
+def _collect_auth_state(context: BrowserContext, timeout_seconds: float = 3.0, poll_interval: float = 0.2) -> dict:
+    """
+    在短时间内轮询 storage_state，兼容 cookies/localStorage 异步写入场景。
+    返回最后一次读取到的 storage_state。
+    """
+    deadline = time.time() + timeout_seconds
+    state = context.storage_state()
+    while time.time() < deadline:
+        if state.get("cookies") or state.get("origins"):
+            return state
+        time.sleep(poll_interval)
+        state = context.storage_state()
+    return state
+
 
 def pytest_addoption(parser):
     """添加自定义命令行选项"""
     parser.addoption(
         "--trace-mode",
         action="store",
+        choices=["off", "on", "retain-on-failure"],
         default="off",
         help="启用 Playwright tracing: 'on' 所有测试, 'retain-on-failure' 仅失败测试保留, 'off' 禁用 (默认)"
     )
 
 
 @pytest.fixture(scope="session")
-def browser_type_launch_args():
+def browser_type_launch_args(pytestconfig):
+    """
+    浏览器启动参数。
+    优先遵循命令行 --headed；未指定时再回退到 config.HEADLESS。
+    """
+    if pytestconfig.getoption("--headed"):
+        return {}
     return {"headless": HEADLESS}
 
 
@@ -59,38 +95,40 @@ def _is_auth_state_valid(browser: Browser) -> bool:
     验证保存的认证状态是否仍然有效
     通过尝试访问需要认证的页面并检查关键元素来判断
     """
-    if not STORAGE_STATE_PATH.exists():
+    storage_state_path = _get_storage_state_path()
+    if not storage_state_path.exists():
         print("ℹ 认证状态文件不存在")
         return False
 
+    context = None
     try:
         print("ℹ 开始验证认证状态...")
         # 创建使用保存状态的临时上下文
-        context = browser.new_context(storage_state=str(STORAGE_STATE_PATH))
+        context = browser.new_context(storage_state=str(storage_state_path))
         page = context.new_page()
 
         # 访问主页
         print(f"ℹ 访问主页: {BASE_URL}")
         page.goto(BASE_URL, timeout=15000)  # 增加超时时间到 15 秒
-        page.wait_for_timeout(2000)  # 增加等待时间到 2 秒
 
         # 检查是否存在登录后才有的元素（如"用药记录"按钮）
         # 如果找到该元素，说明认证有效；否则可能跳转到了登录页
         try:
             print("ℹ 检查登录状态（查找'用药记录'按钮）...")
-            page.wait_for_selector("button:has-text('用药记录')", timeout=10000)  # 增加超时到 10 秒
+            page.wait_for_selector(LOGIN_SUCCESS_SELECTOR, timeout=10000)  # 增加超时到 10 秒
             print("✓ 认证状态有效，找到'用药记录'按钮")
-            context.close()
             return True
         except Exception as e:
             print(f"✗ 未找到'用药记录'按钮: {e}")
             print(f"  当前 URL: {page.url}")
-            context.close()
             return False
 
     except Exception as e:
         print(f"⚠ 验证认证状态失败: {e}")
         return False
+    finally:
+        if context:
+            context.close()
 
 
 def _perform_login(browser: Browser) -> Path:
@@ -98,6 +136,8 @@ def _perform_login(browser: Browser) -> Path:
     执行登录并保存认证状态
     """
     print("\n🔐 执行登录流程...")
+
+    storage_state_path = _get_storage_state_path()
 
     # 创建临时上下文进行登录
     context = browser.new_context()
@@ -118,32 +158,42 @@ def _perform_login(browser: Browser) -> Path:
         print(f"ℹ️  输入密码: {'*' * len(login_data['password'])}")
         login_page.login(login_data["username"], login_data["password"])
 
+        login_selector_found = False
         # 等待登录成功 - 等待特定元素出现确保登录完成
         try:
             print("ℹ️  等待登录完成（查找'用药记录'按钮）...")
-            page.wait_for_selector("button:has-text('用药记录')", timeout=10000)
+            page.wait_for_selector(LOGIN_SUCCESS_SELECTOR, timeout=10000)
             print("✅ 登录成功，已检测到主页元素")
+            login_selector_found = True
         except Exception as e:
             print(f"⚠️  警告：未检测到登录后的主页元素: {e}")
             print(f"   当前 URL: {page.url}")
-            print("   继续等待 2 秒...")
-            page.wait_for_timeout(2000)
+            print("   继续检查 storage_state...")
 
-        # 额外等待，确保所有 cookies 都设置完成
-        print("ℹ️  等待 cookies 设置...")
-        page.wait_for_timeout(1000)
-
-        # 保存认证状态前，检查 cookies
-        cookies = context.cookies()
+        # 保存认证状态前，收集并检查认证状态数据（cookies / origins）
+        print("ℹ️  收集认证状态...")
+        state = _collect_auth_state(context)
+        cookies = state.get("cookies", [])
+        origins = state.get("origins", [])
         print(f"ℹ️  当前 Cookies 数量: {len(cookies)}")
+        print(f"ℹ️  当前 Origins 数量: {len(origins)}")
 
-        if len(cookies) == 0:
-            print("⚠️  警告: 登录后没有 cookies，可能登录失败！")
-            print(f"   当前 URL: {page.url}")
-            # 截图调试
-            screenshot_path = STORAGE_STATE_PATH.parent / "login_debug.png"
+        if len(cookies) == 0 and len(origins) == 0:
+            screenshot_path = STORAGE_STATE_DIR / "login_debug.png"
             page.screenshot(path=str(screenshot_path))
-            print(f"   已保存调试截图: {screenshot_path}")
+            raise RuntimeError(
+                f"登录后未检测到可用认证状态（cookies/origins均为空）！当前 URL: {page.url}，调试截图: {screenshot_path}"
+            )
+        elif len(cookies) == 0 and len(origins) > 0:
+            # 仅 origins 非空时，仍要求检测到登录态特征元素，避免未登录场景误通过
+            if not login_selector_found:
+                screenshot_path = STORAGE_STATE_DIR / "login_debug.png"
+                page.screenshot(path=str(screenshot_path))
+                raise RuntimeError(
+                    "仅检测到 origins 但未检测到登录态特征元素，拒绝保存认证状态。"
+                    f"当前 URL: {page.url}，调试截图: {screenshot_path}"
+                )
+            print("⚠️  未检测到 cookies，但存在 origins 且登录态特征元素可见，继续执行")
         else:
             # 显示部分 cookies 信息
             print(f"ℹ️  Cookies 示例:")
@@ -153,22 +203,22 @@ def _perform_login(browser: Browser) -> Path:
                 print(f"      ... 还有 {len(cookies) - 3} 个")
 
         # 保存认证状态
-        STORAGE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        context.storage_state(path=str(STORAGE_STATE_PATH))
+        STORAGE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        context.storage_state(path=str(storage_state_path))
 
-        print(f"✅ 登录状态已保存到: {STORAGE_STATE_PATH}")
+        print(f"✅ 登录状态已保存到: {storage_state_path}")
 
     except Exception as e:
         print(f"❌ 登录失败: {e}")
         # 截图调试
-        screenshot_path = STORAGE_STATE_PATH.parent / "login_error.png"
+        screenshot_path = STORAGE_STATE_DIR / "login_error.png"
         page.screenshot(path=str(screenshot_path))
         print(f"   已保存错误截图: {screenshot_path}")
         raise
     finally:
         context.close()
 
-    return STORAGE_STATE_PATH
+    return storage_state_path
 
 
 @pytest.fixture(scope="session")
@@ -187,16 +237,17 @@ def authenticated_state(browser: Browser) -> Path:
     print("📋 认证状态检查开始")
     print("="*60)
 
+    storage_state_path = _get_storage_state_path()
     need_refresh = False
 
     # 检查1：文件是否存在
-    if not STORAGE_STATE_PATH.exists():
+    if not storage_state_path.exists():
         print("❌ 认证状态文件不存在，需要登录")
         need_refresh = True
 
     # 检查2：文件是否过期（基于修改时间）
-    elif time.time() - os.path.getmtime(STORAGE_STATE_PATH) > AUTH_STATE_EXPIRY:
-        elapsed_hours = (time.time() - os.path.getmtime(STORAGE_STATE_PATH)) / 3600
+    elif time.time() - os.path.getmtime(storage_state_path) > AUTH_STATE_EXPIRY:
+        elapsed_hours = (time.time() - os.path.getmtime(storage_state_path)) / 3600
         print(f"⏰ 认证状态文件已过期（已存在 {elapsed_hours:.1f} 小时，有效期 {AUTH_STATE_EXPIRY/3600} 小时）")
         need_refresh = True
 
@@ -207,67 +258,60 @@ def authenticated_state(browser: Browser) -> Path:
             print("❌ 认证状态已失效，需要重新登录")
             need_refresh = True
         else:
-            file_age_minutes = (time.time() - os.path.getmtime(STORAGE_STATE_PATH)) / 60
+            file_age_minutes = (time.time() - os.path.getmtime(storage_state_path)) / 60
             print(f"✅ 使用现有有效的认证状态（文件创建于 {file_age_minutes:.1f} 分钟前）")
     else:
         # 跳过在线验证，直接使用文件
-        file_age_minutes = (time.time() - os.path.getmtime(STORAGE_STATE_PATH)) / 60
+        file_age_minutes = (time.time() - os.path.getmtime(storage_state_path)) / 60
         print(f"✅ 使用现有认证状态（文件创建于 {file_age_minutes:.1f} 分钟前）")
         print("ℹ️  跳过在线验证（ENABLE_AUTH_VALIDATION=False）")
 
     # 如果需要刷新，删除旧文件并重新登录
     if need_refresh:
         print("\n🔄 开始重新登录...")
-        if STORAGE_STATE_PATH.exists():
-            STORAGE_STATE_PATH.unlink()
+        if storage_state_path.exists():
+            storage_state_path.unlink()
         result = _perform_login(browser)
         print("="*60)
         return result
 
     print("="*60 + "\n")
-    return STORAGE_STATE_PATH
+    return storage_state_path
+
+
+def _stop_tracing(context, request, tracing_option):
+    """停止并按策略保存 tracing，避免 page/authenticated_page 重复逻辑"""
+    TRACE_DIR.mkdir(parents=True, exist_ok=True)
+    test_name = request.node.name.split('[')[0]
+    node_hash = hashlib.md5(request.node.nodeid.encode("utf-8")).hexdigest()[:8]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    trace_path = TRACE_DIR / f"{test_name}_{node_hash}_{timestamp}.zip"
+    context.tracing.stop(path=str(trace_path))
+    request.node._trace_path = trace_path
+    request.node._trace_mode = tracing_option
 
 
 @pytest.fixture(scope="function")
-def page(browser: Browser, request):
+def page(browser: Browser, request, browser_context_args):
     """默认的page fixture，不带登录状态"""
     tracing_option = request.config.getoption("--trace-mode")
 
-    context = browser.new_context(viewport={"width": 1920, "height": 1080})
+    context = browser.new_context(**browser_context_args)
     page = context.new_page()
 
-    # 启动 tracing
     if tracing_option in ["on", "retain-on-failure"]:
         context.tracing.start(screenshots=True, snapshots=True, sources=True)
 
     yield page
 
-    # 停止并保存 tracing
     if tracing_option in ["on", "retain-on-failure"]:
-        # 获取测试结果
-        test_failed = hasattr(request.node, 'rep_call') and request.node.rep_call.failed
-
-        # 根据策略决定是否保存 trace
-        should_save = (tracing_option == "on") or (tracing_option == "retain-on-failure" and test_failed)
-
-        if should_save:
-            TRACE_DIR.mkdir(parents=True, exist_ok=True)
-            # 生成文件名：测试方法名（去除参数）+ 时间戳
-            test_name = request.node.name.split('[')[0]  # 去除 [chromium] 等参数
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            trace_path = TRACE_DIR / f"{test_name}_{timestamp}.zip"
-            context.tracing.stop(path=str(trace_path))
-
-            # 将 trace 路径保存到 request.node，供 hook 使用
-            request.node._trace_path = trace_path
-        else:
-            context.tracing.stop()
+        _stop_tracing(context, request, tracing_option)
 
     context.close()
 
 
 @pytest.fixture(scope="function")
-def authenticated_page(browser: Browser, authenticated_state: Path, request):
+def authenticated_page(browser: Browser, authenticated_state: Path, request, browser_context_args):
     """
     带登录状态的page fixture
     使用方法：在测试函数参数中使用 authenticated_page 替代 page
@@ -276,36 +320,17 @@ def authenticated_page(browser: Browser, authenticated_state: Path, request):
 
     context = browser.new_context(
         storage_state=str(authenticated_state),
-        viewport={"width": 1920, "height": 1080}
+        **browser_context_args
     )
     page = context.new_page()
 
-    # 启动 tracing
     if tracing_option in ["on", "retain-on-failure"]:
         context.tracing.start(screenshots=True, snapshots=True, sources=True)
 
     yield page
 
-    # 停止并保存 tracing
     if tracing_option in ["on", "retain-on-failure"]:
-        # 获取测试结果
-        test_failed = hasattr(request.node, 'rep_call') and request.node.rep_call.failed
-
-        # 根据策略决定是否保存 trace
-        should_save = (tracing_option == "on") or (tracing_option == "retain-on-failure" and test_failed)
-
-        if should_save:
-            TRACE_DIR.mkdir(parents=True, exist_ok=True)
-            # 生成文件名：测试方法名（去除参数）+ 时间戳
-            test_name = request.node.name.split('[')[0]  # 去除 [chromium] 等参数
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            trace_path = TRACE_DIR / f"{test_name}_{timestamp}.zip"
-            context.tracing.stop(path=str(trace_path))
-
-            # 将 trace 路径保存到 request.node，供 hook 使用
-            request.node._trace_path = trace_path
-        else:
-            context.tracing.stop()
+        _stop_tracing(context, request, tracing_option)
 
     context.close()
 
@@ -319,7 +344,7 @@ def pytest_runtest_makereport(item, call):  # noqa: ARG001
     # 保存测试结果到 item，供 fixture 使用
     setattr(item, f"rep_{report.when}", report)
 
-    if report.when == "call" and report.failed:
+    if report.when in ("setup", "call", "teardown") and report.failed:
         # 获取页面对象（支持 page 和 authenticated_page）
         page = item.funcargs.get("page") or item.funcargs.get("authenticated_page")
         if page:
@@ -341,9 +366,26 @@ def pytest_runtest_makereport(item, call):  # noqa: ARG001
             except Exception as e:
                 print(f"截图失败: {e}")
 
-    # 在 teardown 完成后附加 trace（如果存在）
+    # 在 teardown 完成后按策略处理 trace（附加或删除）
     if report.when == "teardown" and hasattr(item, '_trace_path'):
         trace_path = item._trace_path
+        trace_mode = getattr(item, "_trace_mode", "on")
+        rep_setup = getattr(item, "rep_setup", None)
+        rep_call = getattr(item, "rep_call", None)
+        test_failed = (
+            (rep_setup is not None and rep_setup.failed) or
+            (rep_call is not None and rep_call.failed) or
+            report.failed
+        )
+
+        if trace_mode == "retain-on-failure" and not test_failed:
+            if trace_path.exists():
+                try:
+                    trace_path.unlink()
+                except Exception as e:
+                    print(f"删除无失败 trace 失败: {e}")
+            return
+
         if trace_path.exists():
             try:
                 # 使用文件名（去除 .zip 扩展名）作为附件名称
@@ -357,3 +399,4 @@ def pytest_runtest_makereport(item, call):  # noqa: ARG001
                     )
             except Exception as e:
                 print(f"附加 trace 失败: {e}")
+                

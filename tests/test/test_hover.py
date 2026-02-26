@@ -23,4 +23,4 @@ class TestHover:
         test_page.click_hover_page()
         hover_page = HoverPage(page)
         hover_page.hover_to_btn()
-        hover_page.page.wait_for_timeout(5000)
+        hover_page.page.wait_for_load_state("domcontentloaded")
