@@ -9,7 +9,6 @@ class LoginPage(BasePage):
     LOGIN_BUTTON = Element("css", '[type="submit"]', desc="登录按钮")
     ERROR_MESSAGE = Element("css", ".text-red-800", desc="错误消息")
     LOGIN_SUCCESS = Element("css", ".text-green-800", desc="成功消息")
-    
 
     def open(self):
         self.navigate(f"{BASE_URL}")
