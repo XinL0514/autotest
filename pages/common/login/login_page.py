@@ -1,13 +1,15 @@
 from pages.base_page import BasePage
 from config.config import BASE_URL
+from utils.element import Element
 
 
 class LoginPage(BasePage):
-    USERNAME_INPUT = "#username"
-    PASSWORD_INPUT = "#password"
-    LOGIN_BUTTON = '[type = "submit"]'
-    ERROR_MESSAGE = '[class = "text-sm mt-1 text-red-800"]'
-    LOGIN_SUCCESS = '[class = "text-sm mt-1 text-green-800"]'
+    USERNAME_INPUT = Element("css", "#username", desc="用户名输入框")
+    PASSWORD_INPUT = Element("css", "#password", desc="密码输入框")
+    LOGIN_BUTTON = Element("css", '[type="submit"]', desc="登录按钮")
+    ERROR_MESSAGE = Element("css", ".text-red-800", desc="错误消息")
+    LOGIN_SUCCESS = Element("css", ".text-green-800", desc="成功消息")
+    
 
     def open(self):
         self.navigate(f"{BASE_URL}")

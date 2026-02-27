@@ -92,7 +92,7 @@ class Assertion:
     def assert_true(self, condition, message: str = ""):
         """断言条件为真"""
         try:
-            assert condition is True or condition, message or f"期望为 True, 实际为 {condition}"
+            assert condition, message or f"期望为 True, 实际为 {condition}"
             self.logger.info(f"✓ 断言成功: 条件为 True")
             allure.attach(
                 f"条件: {condition}\n结果: 通过",
@@ -112,7 +112,7 @@ class Assertion:
     def assert_false(self, condition, message: str = ""):
         """断言条件为假"""
         try:
-            assert condition is False or not condition, message or f"期望为 False, 实际为 {condition}"
+            assert not condition, message or f"期望为 False, 实际为 {condition}"
             self.logger.info(f"✓ 断言成功: 条件为 False")
             allure.attach(
                 f"条件: {condition}\n结果: 通过",

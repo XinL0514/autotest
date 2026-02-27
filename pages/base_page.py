@@ -19,4 +19,4 @@ class BasePage(LocatorMixin, ActionMixin, SelectMixin, FileMixin,
     def __init__(self, page: Page):
         self.page = page
         self.timeout = TIMEOUT
-        self.logger = Logger(self.__class__.__name__)
+        self.logger = Logger.get_logger(self.__class__.__name__)
