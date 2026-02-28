@@ -51,9 +51,7 @@ class TestPage(BasePage):
         self.click(self.UPLOADFILEBTN)
     
     def click_upload_file_input(self, file_name: str = DEFAULT_UPLOAD_FILE_NAME):
-        # self.click(self.UPLOADFILEINPUT)
-        file_path = self.build_upload_file_path(file_name)
-        self.file_choose_file(self.UPLOADFILEINPUT, file_path)
+        self.file_choose_file(self.UPLOADFILEINPUT, file_name)
         
     def click_test_jump_button(self):
         self.click(self.TESTJUMPBTN)
