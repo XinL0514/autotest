@@ -1,7 +1,6 @@
 import allure
-from utils.element import Element
+from pages.mixins.locator_mixin import LocatorInput
 from utils.exception_handler import ExceptionHandler
-from typing import Union, Tuple
 
 
 class DragMixin:
@@ -9,8 +8,8 @@ class DragMixin:
 
     @allure.step("拖拽元素到目标位置")
     @ExceptionHandler.handle_playwright_exception("拖拽元素")
-    def drag_to(self, source_locator: Union[str, Tuple[str, str], Element],
-                target_locator: Union[str, Tuple[str, str], Element],
+    def drag_to(self, source_locator: LocatorInput,
+                target_locator: LocatorInput,
                 source_position: dict = None, target_position: dict = None,
                 force: bool = False, timeout: int = None):
         """将元素拖拽到目标元素位置
@@ -27,8 +26,7 @@ class DragMixin:
         target_desc = self._get_locator_description(target_locator)
         self.logger.info(f"尝试拖拽元素: {source_desc} -> {target_desc}")
 
-        element = source_locator if isinstance(source_locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
+        final_timeout = self._resolve_timeout(timeout, self._get_element(source_locator))
 
         drag_options = {"timeout": final_timeout}
         if source_position:
@@ -45,8 +43,8 @@ class DragMixin:
 
     @allure.step("使用鼠标操作拖拽元素")
     @ExceptionHandler.handle_playwright_exception("使用鼠标拖拽元素")
-    def drag_by_mouse(self, source_locator: Union[str, Tuple[str, str], Element],
-                      target_locator: Union[str, Tuple[str, str], Element],
+    def drag_by_mouse(self, source_locator: LocatorInput,
+                      target_locator: LocatorInput,
                       timeout: int = None):
         """使用鼠标操作进行拖拽（drag_to 不生效时的替代方案）
 
@@ -59,8 +57,7 @@ class DragMixin:
         target_desc = self._get_locator_description(target_locator)
         self.logger.info(f"使用鼠标拖拽元素: {source_desc} -> {target_desc}")
 
-        element = source_locator if isinstance(source_locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
+        final_timeout = self._resolve_timeout(timeout, self._get_element(source_locator))
 
         source = self._get_locator(source_locator)
         target = self._get_locator(target_locator)

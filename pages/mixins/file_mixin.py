@@ -1,9 +1,12 @@
 import allure
 from pathlib import Path
-from utils.element import Element
+from pages.mixins.locator_mixin import LocatorInput
 from utils.exception_handler import ExceptionHandler
-from typing import Union, Tuple
+from typing import Union
 from config.config import UPLOAD_FILES_DIR
+
+UploadSinglePath = Union[str, Path]
+UploadPathInput = Union[UploadSinglePath, list[UploadSinglePath], tuple[UploadSinglePath, ...]]
 
 
 class FileMixin:
@@ -24,9 +27,26 @@ class FileMixin:
 
         return str(resolved_path)
 
+    def _normalize_upload_paths(self, file_path: UploadPathInput) -> Union[str, list[str]]:
+        """标准化上传路径：统一转换为绝对路径，并验证文件存在"""
+        if isinstance(file_path, (str, Path)):
+            return self.build_upload_file_path(str(file_path))
+
+        if isinstance(file_path, (list, tuple)):
+            if not file_path:
+                raise ValueError("file_path 文件列表不能为空")
+            normalized_paths = []
+            for one_path in file_path:
+                if not isinstance(one_path, (str, Path)):
+                    raise ValueError(f"file_path 列表中的元素必须是字符串或 Path，当前类型: {type(one_path)}")
+                normalized_paths.append(self.build_upload_file_path(str(one_path)))
+            return normalized_paths
+
+        raise ValueError(f"file_path 类型不支持: {type(file_path)}")
+
     @allure.step("上传文件")
     @ExceptionHandler.handle_playwright_exception("上传文件")
-    def file_set_input_files(self, locator: Union[str, Tuple[str, str], Element], file_path: Union[str, list], timeout: int = None):
+    def file_set_input_files(self, locator: LocatorInput, file_path: UploadPathInput, timeout: int = None):
         """直接操作 input[type='file'] 元素上传文件
 
         Args:
@@ -34,19 +54,17 @@ class FileMixin:
             file_path: 文件路径，单个字符串或多个文件的列表
             timeout: 可选超时时间（毫秒）
         """
+        normalized_file_path = self._normalize_upload_paths(file_path)
         loc_desc = self._get_locator_description(locator)
-        file_info = file_path if isinstance(file_path, str) else f"{len(file_path)} 个文件"
+        file_info = normalized_file_path if isinstance(normalized_file_path, str) else f"{len(normalized_file_path)} 个文件"
         self.logger.info(f"尝试上传文件到元素: {loc_desc}, 文件: {file_info}")
 
-        element = locator if isinstance(locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
-
-        self._get_locator(locator).set_input_files(file_path, timeout=final_timeout)
+        self._run_locator_method(locator, "set_input_files", normalized_file_path, timeout=timeout)
         self.logger.info(f"成功上传文件: {file_info}")
 
     @allure.step("点击按钮并上传文件")
     @ExceptionHandler.handle_playwright_exception("点击按钮并上传文件")
-    def file_choose_file(self, locator: Union[str, Tuple[str, str], Element], file_path: Union[str, list], timeout: int = None):
+    def file_choose_file(self, locator: LocatorInput, file_path: UploadPathInput, timeout: int = None):
         """点击按钮触发文件选择对话框并上传文件
 
         适用于自定义上传按钮（非 input[type='file']）。
@@ -56,17 +74,17 @@ class FileMixin:
             file_path: 文件路径，单个字符串或多个文件的列表
             timeout: 可选超时时间（毫秒）
         """
+        normalized_file_path = self._normalize_upload_paths(file_path)
         loc_desc = self._get_locator_description(locator)
-        file_info = file_path if isinstance(file_path, str) else f"{len(file_path)} 个文件"
+        file_info = normalized_file_path if isinstance(normalized_file_path, str) else f"{len(normalized_file_path)} 个文件"
         self.logger.info(f"尝试点击按钮并上传文件: {loc_desc}, 文件: {file_info}")
 
-        element = locator if isinstance(locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
+        final_timeout = self._resolve_timeout(timeout, self._get_element(locator))
 
-        with self.page.expect_file_chooser() as fc_info:
-            self._get_locator(locator).click(timeout=final_timeout)
+        with self.page.expect_file_chooser(timeout=final_timeout) as fc_info:
+            self._run_locator_method(locator, "click", timeout=timeout)
 
         file_chooser = fc_info.value
         self.logger.info("捕获到文件选择对话框")
-        file_chooser.set_files(file_path)
+        file_chooser.set_files(normalized_file_path, timeout=final_timeout)
         self.logger.info(f"成功上传文件: {file_info}")

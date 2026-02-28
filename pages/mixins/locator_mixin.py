@@ -1,6 +1,10 @@
-from playwright.sync_api import Locator, FrameLocator
+from typing import Any, Optional, Tuple, Union
+
+from playwright.sync_api import Locator
 from utils.element import Element
-from typing import Union, Tuple
+
+RoleLocator = Union[Tuple[str], Tuple[str, str]]
+LocatorInput = Union[str, RoleLocator, Element]
 
 
 class LocatorMixin:
@@ -14,7 +18,7 @@ class LocatorMixin:
             return element.timeout
         return self.timeout
 
-    def _get_locator(self, locator: Union[str, Tuple[str, str], Element], context=None) -> Locator:
+    def _get_locator(self, locator: LocatorInput, context=None) -> Locator:
         """智能定位器：自动识别定位器类型并返回 Playwright Locator
 
         Args:
@@ -49,7 +53,7 @@ class LocatorMixin:
         else:
             raise ValueError(f"不支持的定位器类型: {type(locator)}, 值: {locator}")
 
-    def _get_locator_description(self, locator: Union[str, Tuple[str, str], Element]) -> str:
+    def _get_locator_description(self, locator: LocatorInput) -> str:
         """获取定位器的描述字符串（用于日志）"""
         if isinstance(locator, Element):
             return locator.get_description()
@@ -120,3 +124,27 @@ class LocatorMixin:
             return ctx.locator(f"xpath={value}")
         else:
             raise ValueError(f"不支持的定位方式: {by}")
+
+    def _get_element(self, locator: LocatorInput) -> Optional[Element]:
+        """从定位器参数中提取 Element 对象（若不是 Element 则返回 None）"""
+        return locator if isinstance(locator, Element) else None
+
+    def _run_locator_method(
+        self,
+        locator: LocatorInput,
+        method_name: str,
+        *args: Any,
+        timeout: int = None,
+        context=None,
+        use_timeout: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """统一执行 Locator 方法，集中处理 timeout、context 与调用分发"""
+        method_kwargs = dict(kwargs)
+        if use_timeout:
+            final_timeout = self._resolve_timeout(timeout, self._get_element(locator))
+            method_kwargs.setdefault("timeout", final_timeout)
+
+        target_locator = self._get_locator(locator, context=context)
+        method = getattr(target_locator, method_name)
+        return method(*args, **method_kwargs)

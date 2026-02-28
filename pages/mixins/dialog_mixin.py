@@ -1,7 +1,7 @@
 import allure
-from utils.element import Element
+from pages.mixins.locator_mixin import LocatorInput
 from utils.exception_handler import ExceptionHandler
-from typing import Union, Tuple, Optional
+from typing import Optional
 
 
 class DialogMixin:
@@ -9,7 +9,7 @@ class DialogMixin:
 
     @allure.step("点击元素并接受对话框")
     @ExceptionHandler.handle_playwright_exception("点击元素并接受对话框")
-    def click_and_accept_dialog(self, locator: Union[str, Tuple[str, str], Element],
+    def click_and_accept_dialog(self, locator: LocatorInput,
                                 message_check: str = None):
         """点击元素并自动接受弹出的对话框（点击"确定"）
 
@@ -21,7 +21,7 @@ class DialogMixin:
 
     @allure.step("点击元素并取消对话框")
     @ExceptionHandler.handle_playwright_exception("点击元素并取消对话框")
-    def click_and_dismiss_dialog(self, locator: Union[str, Tuple[str, str], Element],
+    def click_and_dismiss_dialog(self, locator: LocatorInput,
                                  message_check: str = None):
         """点击元素并自动取消弹出的对话框（点击"取消"）
 
@@ -33,7 +33,7 @@ class DialogMixin:
 
     @allure.step("点击元素并处理对话框")
     @ExceptionHandler.handle_playwright_exception("点击元素并处理对话框")
-    def click_and_handle_dialog(self, locator: Union[str, Tuple[str, str], Element],
+    def click_and_handle_dialog(self, locator: LocatorInput,
                                 accept: bool = True, message_check: str = None, timeout: int = None) -> Optional[str]:
         """点击元素并处理弹出的 JavaScript 对话框（通用方法）
 
@@ -53,11 +53,10 @@ class DialogMixin:
         action_text = "接受" if accept else "取消"
         self.logger.info(f"尝试点击元素并{action_text}对话框: {loc_desc}")
 
-        element = locator if isinstance(locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
+        final_timeout = self._resolve_timeout(timeout, self._get_element(locator))
 
         with self.page.expect_event("dialog", timeout=final_timeout) as dialog_info:
-            self._get_locator(locator).click(timeout=final_timeout)
+            self._run_locator_method(locator, "click", timeout=timeout)
 
         dialog = dialog_info.value
         dialog_message = dialog.message

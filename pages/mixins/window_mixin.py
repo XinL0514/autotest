@@ -1,7 +1,6 @@
 import allure
-from utils.element import Element
+from pages.mixins.locator_mixin import LocatorInput
 from utils.exception_handler import ExceptionHandler
-from typing import Union, Tuple
 
 
 class WindowMixin:
@@ -9,7 +8,7 @@ class WindowMixin:
 
     @allure.step("点击并处理新窗口")
     @ExceptionHandler.handle_playwright_exception("点击并处理新窗口")
-    def click_and_handle_new_page(self, locator: Union[str, Tuple[str, str], Element],
+    def click_and_handle_new_page(self, locator: LocatorInput,
                                    wait_for_load: bool = True, wait_until: str = "domcontentloaded", timeout: int = None):
         """点击元素并获取新打开的页面对象
 
@@ -25,11 +24,10 @@ class WindowMixin:
         loc_desc = self._get_locator_description(locator)
         self.logger.info(f"尝试点击元素并处理新窗口: {loc_desc}")
 
-        element = locator if isinstance(locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
+        final_timeout = self._resolve_timeout(timeout, self._get_element(locator))
 
-        with self.page.context.expect_page() as new_page_info:
-            self._get_locator(locator).click(timeout=final_timeout)
+        with self.page.context.expect_page(timeout=final_timeout) as new_page_info:
+            self._run_locator_method(locator, "click", timeout=timeout)
 
         new_page = new_page_info.value
         self.logger.info(f"成功获取新页面: {new_page.url}")

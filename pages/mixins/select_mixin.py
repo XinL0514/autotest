@@ -1,7 +1,6 @@
 import allure
-from utils.element import Element
+from pages.mixins.locator_mixin import LocatorInput
 from utils.exception_handler import ExceptionHandler
-from typing import Union, Tuple
 
 
 class SelectMixin:
@@ -9,7 +8,7 @@ class SelectMixin:
 
     @allure.step("选择下拉选项")
     @ExceptionHandler.handle_playwright_exception("选择下拉选项")
-    def select_option(self, locator: Union[str, Tuple[str, str], Element],
+    def select_option(self, locator: LocatorInput,
                       value: str = None, label: str = None, index: int = None, timeout: int = None) -> list:
         """选择 <select> 下拉框的选项 - 支持按 value、label 或 index 选择
 
@@ -24,28 +23,29 @@ class SelectMixin:
             被选中的 option 的 value 列表
         """
         loc_desc = self._get_locator_description(locator)
-        element = locator if isinstance(locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, element)
+        options_count = sum(option is not None for option in (value, label, index))
+        if options_count == 0:
+            raise ValueError("必须提供 value、label 或 index 中的至少一个参数")
+        if options_count > 1:
+            raise ValueError("value、label、index 参数互斥，只能传一个")
 
         if label is not None:
             self.logger.info(f"尝试选择下拉选项: {loc_desc}, label={label}")
-            result = self._get_locator(locator).select_option(label=label, timeout=final_timeout)
+            result = self._run_locator_method(locator, "select_option", timeout=timeout, label=label)
         elif value is not None:
             self.logger.info(f"尝试选择下拉选项: {loc_desc}, value={value}")
-            result = self._get_locator(locator).select_option(value=value, timeout=final_timeout)
-        elif index is not None:
-            self.logger.info(f"尝试选择下拉选项: {loc_desc}, index={index}")
-            result = self._get_locator(locator).select_option(index=index, timeout=final_timeout)
+            result = self._run_locator_method(locator, "select_option", timeout=timeout, value=value)
         else:
-            raise ValueError("必须提供 value、label 或 index 中的至少一个参数")
+            self.logger.info(f"尝试选择下拉选项: {loc_desc}, index={index}")
+            result = self._run_locator_method(locator, "select_option", timeout=timeout, index=index)
 
         self.logger.info(f"成功选择下拉选项: {loc_desc}, 选中值: {result}")
         return result
 
     @allure.step("选择自定义下拉选项")
     @ExceptionHandler.handle_playwright_exception("选择自定义下拉选项")
-    def click_select_option(self, trigger_locator: Union[str, Tuple[str, str], Element],
-                            option_locator: Union[str, Tuple[str, str], Element],
+    def click_select_option(self, trigger_locator: LocatorInput,
+                            option_locator: LocatorInput,
                             option_text: str = None, timeout: int = None):
         """点击自定义下拉组件并选择选项（适用于 antd Select、Element UI Select 等）
 
@@ -60,17 +60,12 @@ class SelectMixin:
         trigger_desc = self._get_locator_description(trigger_locator)
         option_desc = self._get_locator_description(option_locator)
 
-        trigger_element = trigger_locator if isinstance(trigger_locator, Element) else None
-        final_timeout = self._resolve_timeout(timeout, trigger_element)
-
         self.logger.info(f"点击下拉触发器: {trigger_desc}")
-        self._get_locator(trigger_locator).click(timeout=final_timeout)
-
-        option_element = option_locator if isinstance(option_locator, Element) else None
-        option_timeout = self._resolve_timeout(timeout, option_element)
+        self._run_locator_method(trigger_locator, "click", timeout=timeout)
 
         option_loc = self._get_locator(option_locator)
-        option_loc.wait_for(state="visible", timeout=option_timeout)
+        option_timeout = self._resolve_timeout(timeout, self._get_element(option_locator))
+        self._run_locator_method(option_locator, "wait_for", timeout=timeout, state="visible")
 
         if option_text:
             self.logger.info(f"在 {option_desc} 中查找文本: {option_text}")
