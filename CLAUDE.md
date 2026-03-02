@@ -222,4 +222,4 @@ Key settings in conftest.py:
 - `authenticated_page` — Browser page with login state loaded
 - `authenticated_state` — Session-level fixture that manages login state
 - `browser_context_args` — Viewport config (1920x1080)
-- `browser_type_launch_args` — Browser launch args (headless mode)1
+- `browser_type_launch_args` — Browser launch args (headless mode)1222
