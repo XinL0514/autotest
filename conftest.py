@@ -291,6 +291,41 @@ def _stop_tracing(context, request, tracing_option):
     request.node._trace_mode = tracing_option
 
 
+def _create_page_with_tracing(browser, request, browser_context_args, storage_state=None):
+    """创建带 tracing 的 page，提取 page 和 authenticated_page 的通用逻辑
+
+    Args:
+        browser: Browser 实例
+        request: pytest request 对象
+        browser_context_args: context 参数
+        storage_state: 可选的登录状态文件路径
+
+    Yields:
+        Page: 创建的 page 对象
+    """
+    tracing_option = request.config.getoption("--trace-mode")
+
+    # 创建 context（带或不带登录状态）
+    context_kwargs = {**browser_context_args}
+    if storage_state:
+        context_kwargs["storage_state"] = str(storage_state)
+
+    context = browser.new_context(**context_kwargs)
+    page = context.new_page()
+
+    # 启动 tracing
+    if tracing_option in ["on", "retain-on-failure"]:
+        context.tracing.start(screenshots=True, snapshots=True, sources=True)
+
+    yield page
+
+    # 停止 tracing
+    if tracing_option in ["on", "retain-on-failure"]:
+        _stop_tracing(context, request, tracing_option)
+
+    context.close()
+
+
 def _get_failure_details(report) -> str:
     """提取失败详情文本，优先使用 longreprtext。"""
     details = getattr(report, "longreprtext", "")
@@ -355,20 +390,7 @@ def _attach_failure_details(item, report, call):
 @pytest.fixture(scope="function")
 def page(browser: Browser, request, browser_context_args):
     """默认的page fixture，不带登录状态"""
-    tracing_option = request.config.getoption("--trace-mode")
-
-    context = browser.new_context(**browser_context_args)
-    page = context.new_page()
-
-    if tracing_option in ["on", "retain-on-failure"]:
-        context.tracing.start(screenshots=True, snapshots=True, sources=True)
-
-    yield page
-
-    if tracing_option in ["on", "retain-on-failure"]:
-        _stop_tracing(context, request, tracing_option)
-
-    context.close()
+    yield from _create_page_with_tracing(browser, request, browser_context_args)
 
 
 @pytest.fixture(scope="function")
@@ -377,23 +399,7 @@ def authenticated_page(browser: Browser, authenticated_state: Path, request, bro
     带登录状态的page fixture
     使用方法：在测试函数参数中使用 authenticated_page 替代 page
     """
-    tracing_option = request.config.getoption("--trace-mode")
-
-    context = browser.new_context(
-        storage_state=str(authenticated_state),
-        **browser_context_args
-    )
-    page = context.new_page()
-
-    if tracing_option in ["on", "retain-on-failure"]:
-        context.tracing.start(screenshots=True, snapshots=True, sources=True)
-
-    yield page
-
-    if tracing_option in ["on", "retain-on-failure"]:
-        _stop_tracing(context, request, tracing_option)
-
-    context.close()
+    yield from _create_page_with_tracing(browser, request, browser_context_args, storage_state=authenticated_state)
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)

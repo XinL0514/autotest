@@ -30,6 +30,26 @@ class IframeMixin:
             **kwargs,
         )
 
+    def _execute_frame_action(self, frame_locator: str, element_locator: LocatorInput,
+                              action_name: str, method_name: str, *args,
+                              timeout: int = None, **kwargs):
+        """通用 frame 操作执行方法，封装日志记录
+
+        Args:
+            frame_locator: iframe 定位器
+            element_locator: 元素定位器
+            action_name: 操作名称（用于日志）
+            method_name: 要调用的方法名
+            *args: 方法的位置参数
+            timeout: 超时时间
+            **kwargs: 方法的关键字参数
+        """
+        loc_desc = self._get_locator_description(element_locator)
+        self.logger.info(f"在 iframe '{frame_locator}' 中{action_name}: {loc_desc}")
+        result = self._run_frame_locator_method(frame_locator, element_locator, method_name, *args, timeout=timeout, **kwargs)
+        self.logger.info(f"成功{action_name} iframe 中的元素: {loc_desc}")
+        return result
+
     @allure.step("切换到 iframe")
     def switch_to_frame(self, frame_locator: str) -> FrameLocator:
         """切换到指定的 iframe，返回 FrameLocator 对象
@@ -49,10 +69,7 @@ class IframeMixin:
     @FrameExceptionHandler.handle_frame_exception("在 iframe 中点击元素")
     def frame_click(self, frame_locator: str, element_locator: LocatorInput, timeout: int = None):
         """在指定 iframe 中点击元素"""
-        loc_desc = self._get_locator_description(element_locator)
-        self.logger.info(f"在 iframe '{frame_locator}' 中点击元素: {loc_desc}")
-        self._run_frame_locator_method(frame_locator, element_locator, "click", timeout=timeout)
-        self.logger.info(f"成功点击 iframe 中的元素: {loc_desc}")
+        self._execute_frame_action(frame_locator, element_locator, "点击元素", "click", timeout=timeout)
 
     @allure.step("在 iframe 中填充元素")
     @FrameExceptionHandler.handle_frame_exception("在 iframe 中填充元素")
@@ -94,7 +111,4 @@ class IframeMixin:
     @FrameExceptionHandler.handle_frame_exception("等待 iframe 中元素出现")
     def frame_wait_for_selector(self, frame_locator: str, element_locator: LocatorInput, timeout: int = None):
         """等待 iframe 中元素出现"""
-        loc_desc = self._get_locator_description(element_locator)
-        self.logger.info(f"等待 iframe '{frame_locator}' 中元素出现: {loc_desc}")
-        self._run_frame_locator_method(frame_locator, element_locator, "wait_for", timeout=timeout, state="visible")
-        self.logger.info(f"iframe 中元素已出现: {loc_desc}")
+        self._execute_frame_action(frame_locator, element_locator, "等待元素出现", "wait_for", timeout=timeout, state="visible")

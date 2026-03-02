@@ -6,6 +6,24 @@ from utils.exception_handler import ExceptionHandler
 class DragMixin:
     """拖拽操作"""
 
+    def _prepare_drag_locators(self, source_locator: LocatorInput, target_locator: LocatorInput, timeout: int = None):
+        """准备拖拽操作的定位器和描述信息
+
+        Args:
+            source_locator: 源元素定位器
+            target_locator: 目标元素定位器
+            timeout: 可选超时时间
+
+        Returns:
+            tuple: (source_desc, target_desc, final_timeout, source, target)
+        """
+        source_desc = self._get_locator_description(source_locator)
+        target_desc = self._get_locator_description(target_locator)
+        final_timeout = self._resolve_timeout(timeout, self._get_element(source_locator))
+        source = self._get_locator(source_locator)
+        target = self._get_locator(target_locator)
+        return source_desc, target_desc, final_timeout, source, target
+
     @allure.step("拖拽元素到目标位置")
     @ExceptionHandler.handle_playwright_exception("拖拽元素")
     def drag_to(self, source_locator: LocatorInput,
@@ -22,11 +40,10 @@ class DragMixin:
             force: 是否强制拖拽（跳过可操作性检查），默认 False
             timeout: 可选超时时间（毫秒）
         """
-        source_desc = self._get_locator_description(source_locator)
-        target_desc = self._get_locator_description(target_locator)
+        source_desc, target_desc, final_timeout, source, target = self._prepare_drag_locators(
+            source_locator, target_locator, timeout
+        )
         self.logger.info(f"尝试拖拽元素: {source_desc} -> {target_desc}")
-
-        final_timeout = self._resolve_timeout(timeout, self._get_element(source_locator))
 
         drag_options = {"timeout": final_timeout}
         if source_position:
@@ -36,8 +53,6 @@ class DragMixin:
         if force:
             drag_options["force"] = force
 
-        source = self._get_locator(source_locator)
-        target = self._get_locator(target_locator)
         source.drag_to(target, **drag_options)
         self.logger.info(f"成功拖拽元素: {source_desc} -> {target_desc}")
 
@@ -53,14 +68,11 @@ class DragMixin:
             target_locator: 目标元素定位器
             timeout: 可选超时时间（毫秒）
         """
-        source_desc = self._get_locator_description(source_locator)
-        target_desc = self._get_locator_description(target_locator)
+        source_desc, target_desc, final_timeout, source, target = self._prepare_drag_locators(
+            source_locator, target_locator, timeout
+        )
         self.logger.info(f"使用鼠标拖拽元素: {source_desc} -> {target_desc}")
 
-        final_timeout = self._resolve_timeout(timeout, self._get_element(source_locator))
-
-        source = self._get_locator(source_locator)
-        target = self._get_locator(target_locator)
         source.wait_for(state="visible", timeout=final_timeout)
         target.wait_for(state="visible", timeout=final_timeout)
 

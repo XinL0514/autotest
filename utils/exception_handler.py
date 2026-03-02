@@ -7,7 +7,62 @@ from playwright.sync_api import TimeoutError
 from typing import Callable, Any
 
 
-class ExceptionHandler:
+class BaseExceptionHandler:
+    """异常处理基类 - 提取通用异常处理逻辑"""
+
+    @staticmethod
+    def _handle_exception(
+        exception: Exception,
+        operation_name: str,
+        error_context: str,
+        logger,
+        return_on_error: Any,
+        raise_assertion: bool
+    ):
+        """通用异常处理逻辑
+
+        Args:
+            exception: 捕获的异常
+            operation_name: 操作名称
+            error_context: 错误上下文（定位器描述等）
+            logger: 日志对象
+            return_on_error: 错误时返回值
+            raise_assertion: 是否将 TimeoutError 转为 AssertionError
+        """
+        if isinstance(exception, TimeoutError):
+            error_msg = f"{operation_name}超时"
+            if error_context:
+                error_msg += f": {error_context}"
+
+            if logger:
+                logger.error(error_msg)
+
+            if raise_assertion:
+                raise AssertionError(error_msg) from exception
+            elif return_on_error is not None:
+                return return_on_error
+            else:
+                raise
+
+        elif isinstance(exception, AssertionError):
+            raise
+
+        else:
+            error_msg = f"{operation_name}失败"
+            if error_context:
+                error_msg += f": {error_context}"
+            error_msg += f", 错误: {str(exception)}"
+
+            if logger:
+                logger.error(error_msg)
+
+            if return_on_error is not None:
+                return return_on_error
+            else:
+                raise
+
+
+class ExceptionHandler(BaseExceptionHandler):
     """异常处理装饰器类"""
 
     @staticmethod
@@ -39,7 +94,6 @@ class ExceptionHandler:
         def decorator(func: Callable) -> Callable:
             @functools.wraps(func)
             def wrapper(self, *args, **kwargs):
-                # 获取 logger（假设 self 有 logger 属性）
                 logger = getattr(self, 'logger', None)
 
                 # 尝试获取定位器描述（第一个参数通常是 locator）
@@ -48,11 +102,8 @@ class ExceptionHandler:
                     try:
                         loc_desc = self._get_locator_description(args[0])
                         # 只在双定位器方法中尝试获取第二个定位器
-                        # 双定位器方法特征：第二个参数也是定位器类型（不是 str/int/dict 等普通类型）
                         if len(args) > 1:
                             second_arg = args[1]
-                            # 检查第二个参数是否是定位器（Element/tuple/定位器字符串）
-                            # 排除普通字符串（text参数）、数字、字典等
                             is_locator = (
                                 hasattr(second_arg, '__class__') and second_arg.__class__.__name__ == 'Element'
                                 or isinstance(second_arg, tuple)
@@ -69,51 +120,22 @@ class ExceptionHandler:
                         loc_desc = str(args[0]) if args else "未知元素"
 
                 try:
-                    # 执行原始方法
                     return func(self, *args, **kwargs)
-
-                except TimeoutError as e:
-                    # 处理超时异常
-                    error_msg = f"{operation_name or func.__name__}超时"
-                    if loc_desc:
-                        error_msg += f": {loc_desc}"
-
-                    if logger:
-                        logger.error(error_msg)
-
-                    # 根据配置决定是否转换为 AssertionError
-                    if raise_assertion:
-                        raise AssertionError(error_msg) from e
-                    elif return_on_error is not None:
-                        return return_on_error
-                    else:
-                        raise
-
-                except AssertionError:
-                    # AssertionError 直接向上抛出（可能来自内部验证）
-                    raise
-
                 except Exception as e:
-                    # 处理其他异常
-                    error_msg = f"{operation_name or func.__name__}失败"
-                    if loc_desc:
-                        error_msg += f": {loc_desc}"
-                    error_msg += f", 错误: {str(e)}"
-
-                    if logger:
-                        logger.error(error_msg)
-
-                    # 其他异常根据配置决定返回值或抛出
-                    if return_on_error is not None:
-                        return return_on_error
-                    else:
-                        raise
+                    return BaseExceptionHandler._handle_exception(
+                        e,
+                        operation_name or func.__name__,
+                        loc_desc,
+                        logger,
+                        return_on_error,
+                        raise_assertion
+                    )
 
             return wrapper
         return decorator
 
 
-class FrameExceptionHandler:
+class FrameExceptionHandler(BaseExceptionHandler):
     """iframe 操作专用异常处理装饰器"""
 
     @staticmethod
@@ -137,35 +159,19 @@ class FrameExceptionHandler:
                     except Exception:
                         loc_desc = str(element_locator)
 
+                error_context = f"iframe={frame_locator}, element={loc_desc}"
+
                 try:
                     return func(self, frame_locator, element_locator, *args, **kwargs)
-
-                except TimeoutError:
-                    error_msg = f"{operation_name or func.__name__}超时"
-                    error_msg += f": iframe={frame_locator}, element={loc_desc}"
-
-                    if logger:
-                        logger.error(error_msg)
-
-                    if return_on_error is not None:
-                        return return_on_error
-                    else:
-                        raise AssertionError(error_msg)
-
-                except AssertionError:
-                    raise
-
                 except Exception as e:
-                    error_msg = f"{operation_name or func.__name__}失败"
-                    error_msg += f": iframe={frame_locator}, element={loc_desc}, 错误: {str(e)}"
-
-                    if logger:
-                        logger.error(error_msg)
-
-                    if return_on_error is not None:
-                        return return_on_error
-                    else:
-                        raise
+                    return BaseExceptionHandler._handle_exception(
+                        e,
+                        operation_name or func.__name__,
+                        error_context,
+                        logger,
+                        return_on_error,
+                        raise_assertion=True
+                    )
 
             return wrapper
         return decorator

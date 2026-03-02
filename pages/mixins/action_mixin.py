@@ -7,6 +7,24 @@ from typing import Optional
 class ActionMixin:
     """基础交互操作：点击、填充、获取文本、可见性检查、悬停等"""
 
+    def _execute_action(self, locator: LocatorInput, action_name: str, method_name: str,
+                       *args, timeout: int = None, **kwargs):
+        """通用操作执行方法，封装日志记录
+
+        Args:
+            locator: 定位器
+            action_name: 操作名称（用于日志）
+            method_name: 要调用的定位器方法名
+            *args: 方法的位置参数
+            timeout: 超时时间
+            **kwargs: 方法的关键字参数
+        """
+        loc_desc = self._get_locator_description(locator)
+        self.logger.info(f"尝试{action_name}: {loc_desc}")
+        result = self._run_locator_method(locator, method_name, *args, timeout=timeout, **kwargs)
+        self.logger.info(f"成功{action_name}: {loc_desc}")
+        return result
+
     @allure.step("导航到页面")
     @ExceptionHandler.handle_playwright_exception("导航到页面")
     def navigate(self, url: str, wait_until: str = "domcontentloaded"):
@@ -24,10 +42,7 @@ class ActionMixin:
     @ExceptionHandler.handle_playwright_exception("点击元素")
     def click(self, locator: LocatorInput, timeout: int = None):
         """智能点击元素 - 支持 CSS/XPath 字符串、Role 元组或 Element 对象"""
-        loc_desc = self._get_locator_description(locator)
-        self.logger.info(f"尝试点击元素: {loc_desc}")
-        self._run_locator_method(locator, "click", timeout=timeout)
-        self.logger.info(f"成功点击元素: {loc_desc}")
+        self._execute_action(locator, "点击元素", "click", timeout=timeout)
 
     @allure.step("填充元素")
     @ExceptionHandler.handle_playwright_exception("填充元素")
@@ -73,19 +88,13 @@ class ActionMixin:
     @ExceptionHandler.handle_playwright_exception("双击元素")
     def double_click(self, locator: LocatorInput, timeout: int = None):
         """智能双击元素"""
-        loc_desc = self._get_locator_description(locator)
-        self.logger.info(f"尝试双击元素: {loc_desc}")
-        self._run_locator_method(locator, "dblclick", timeout=timeout)
-        self.logger.info(f"成功双击元素: {loc_desc}")
+        self._execute_action(locator, "双击元素", "dblclick", timeout=timeout)
 
     @allure.step("右键点击元素")
     @ExceptionHandler.handle_playwright_exception("右键点击元素")
     def right_click(self, locator: LocatorInput, timeout: int = None):
         """智能右键点击元素"""
-        loc_desc = self._get_locator_description(locator)
-        self.logger.info(f"尝试右键点击元素: {loc_desc}")
-        self._run_locator_method(locator, "click", timeout=timeout, button="right")
-        self.logger.info(f"成功右键点击元素: {loc_desc}")
+        self._execute_action(locator, "右键点击元素", "click", timeout=timeout, button="right")
 
     @allure.step("获取元素属性")
     @ExceptionHandler.handle_playwright_exception("获取元素属性")
@@ -123,19 +132,13 @@ class ActionMixin:
     @ExceptionHandler.handle_playwright_exception("选中元素")
     def check(self, locator: LocatorInput, timeout: int = None):
         """智能选中元素"""
-        loc_desc = self._get_locator_description(locator)
-        self.logger.info(f"尝试选中元素: {loc_desc}")
-        self._run_locator_method(locator, "check", timeout=timeout)
-        self.logger.info(f"成功选中元素: {loc_desc}")
+        self._execute_action(locator, "选中元素", "check", timeout=timeout)
 
     @allure.step("取消选中元素")
     @ExceptionHandler.handle_playwright_exception("取消选中元素")
     def uncheck(self, locator: LocatorInput, timeout: int = None):
         """智能取消选中元素"""
-        loc_desc = self._get_locator_description(locator)
-        self.logger.info(f"尝试取消选中元素: {loc_desc}")
-        self._run_locator_method(locator, "uncheck", timeout=timeout)
-        self.logger.info(f"成功取消选中元素: {loc_desc}")
+        self._execute_action(locator, "取消选中元素", "uncheck", timeout=timeout)
 
     @allure.step("悬停到元素")
     @ExceptionHandler.handle_playwright_exception("悬停到元素")
