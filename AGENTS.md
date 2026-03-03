@@ -38,6 +38,7 @@ This repository is a Python UI automation framework built with Playwright + Pyte
 - Naming is enforced by `pytest.ini`: `test_*.py`, `Test*`, and `test_*`.
 - Use `page` fixture for unauthenticated flows.
 - Use `authenticated_page` fixture for logged-in flows; session-level auth state is managed by `authenticated_state`.
+- Auth state files are saved under `test_data/` as `auth_state.json`; when running with xdist, files are worker-isolated as `auth_state_<worker>.json`.
 - `--trace-mode` supports: `off` (default), `on`, `retain-on-failure`.
 - On failure, `conftest.py` auto-attaches screenshot and URL to Allure; trace files are attached when generated.
 - Keep test data close to the module and update tests with each behavior change.
@@ -54,7 +55,8 @@ This repository is a Python UI automation framework built with Playwright + Pyte
 ## Security & Configuration Tips
 - Do not commit real credentials, tokens, or sensitive cookies.
 - Review sensitive/generated files before pushing:
-  - `test_data/auth_state.json`
+  - `test_data/auth_state*.json`
+  - `test_data/login_debug.png`, `test_data/login_error.png`
   - `logs/`
   - `allure-results/`, `allure-report/`
   - `test-results/`
