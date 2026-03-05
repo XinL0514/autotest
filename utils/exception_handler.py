@@ -17,7 +17,8 @@ class BaseExceptionHandler:
         error_context: str,
         logger,
         return_on_error: Any,
-        raise_assertion: bool
+        raise_assertion: bool,
+        fallback_on_unexpected_error: bool = False,
     ):
         """通用异常处理逻辑
 
@@ -28,6 +29,9 @@ class BaseExceptionHandler:
             logger: 日志对象
             return_on_error: 错误时返回值
             raise_assertion: 是否将 TimeoutError 转为 AssertionError
+            fallback_on_unexpected_error:
+                是否在非 TimeoutError 场景也返回 return_on_error。
+                默认 False，避免吞掉真实错误。
         """
         if isinstance(exception, TimeoutError):
             error_msg = f"{operation_name}超时"
@@ -56,7 +60,7 @@ class BaseExceptionHandler:
             if logger:
                 logger.error(error_msg)
 
-            if return_on_error is not None:
+            if fallback_on_unexpected_error and return_on_error is not None:
                 return return_on_error
             else:
                 raise
@@ -69,7 +73,8 @@ class ExceptionHandler(BaseExceptionHandler):
     def handle_playwright_exception(
         operation_name: str = None,
         return_on_error: Any = None,
-        raise_assertion: bool = True
+        raise_assertion: bool = True,
+        fallback_on_unexpected_error: bool = False,
     ):
         """统一处理 Playwright 操作异常的装饰器
 
@@ -77,6 +82,9 @@ class ExceptionHandler(BaseExceptionHandler):
             operation_name: 操作名称（如 "点击元素"、"填充元素"），用于错误消息
             return_on_error: 发生错误时的返回值（用于 is_visible 等查询方法）
             raise_assertion: 是否将 TimeoutError 转换为 AssertionError（默认 True）
+            fallback_on_unexpected_error:
+                是否对非 TimeoutError 也返回 return_on_error。
+                默认 False，推荐保持默认值以避免误判通过。
 
         Examples:
             # 抛出异常的操作（如 click、fill）
@@ -128,7 +136,8 @@ class ExceptionHandler(BaseExceptionHandler):
                         loc_desc,
                         logger,
                         return_on_error,
-                        raise_assertion
+                        raise_assertion,
+                        fallback_on_unexpected_error,
                     )
 
             return wrapper
