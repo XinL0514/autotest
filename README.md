@@ -85,7 +85,7 @@ autotest/
 
 ## 核心概念
 
-### 1. BasePage 与 Mixin
+### 1. BasePage 与 Mixin111
 
 所有页面对象继承自 `BasePage`，自动获得 9 个 Mixin 的能力：
 
