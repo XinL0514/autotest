@@ -1,14 +1,8 @@
 import allure
-import pytest
 from playwright.sync_api import Page
-from pages.modules.test.test_page import TestPage
-from pages.common.uploadfile.upload_page import UploadPage
-from pages.modules.test.jump_page import JumpPage
-from utils.data_loader import DataLoader
 from pages.modules.test.select_page import SelectPage
 from utils.logger import Logger
 from utils.assertion import Assertion
-from utils.time_utils import timeStamp
 logger = Logger.get_logger("TestSelect")
 assertion = Assertion("TestSelect")
 

@@ -44,10 +44,10 @@ class FileMixin:
 
         raise ValueError(f"file_path 类型不支持: {type(file_path)}")
 
-    @allure.step("上传文件")
-    @ExceptionHandler.handle_playwright_exception("上传文件")
+    @allure.step("直接操作H5的 input[type='file'] 元素上传文件")
+    @ExceptionHandler.handle_playwright_exception("直接操作H5的 input[type='file'] 元素上传文件")
     def file_set_input_files(self, locator: LocatorInput, file_path: UploadPathInput, timeout: int = None):
-        """直接操作 input[type='file'] 元素上传文件
+        """直接操作H5的 input[type='file'] 元素上传文件
 
         Args:
             locator: 文件上传输入框的定位器
@@ -57,17 +57,17 @@ class FileMixin:
         normalized_file_path = self._normalize_upload_paths(file_path)
         loc_desc = self._get_locator_description(locator)
         file_info = normalized_file_path if isinstance(normalized_file_path, str) else f"{len(normalized_file_path)} 个文件"
-        self.logger.info(f"尝试上传文件到元素: {loc_desc}, 文件: {file_info}")
+        self.logger.info(f"尝试直接操作H5的 input[type='file'] 元素上传文件: {loc_desc}, 文件: {file_info}")
 
         self._run_locator_method(locator, "set_input_files", normalized_file_path, timeout=timeout)
-        self.logger.info(f"成功上传文件: {file_info}")
+        self.logger.info(f"成功直接操作H5的 input[type='file'] 元素上传文件: {file_info}")
 
-    @allure.step("点击按钮并上传文件")
-    @ExceptionHandler.handle_playwright_exception("点击按钮并上传文件")
+    @allure.step("点击按钮触发原生文件选择对话框并上传文件")
+    @ExceptionHandler.handle_playwright_exception("点击按钮触发原生文件选择对话框并上传文件")
     def file_choose_file(self, locator: LocatorInput, file_path: UploadPathInput, timeout: int = None):
-        """点击按钮触发文件选择对话框并上传文件
+        """点击按钮触发原生文件选择对话框并上传文件
 
-        适用于自定义上传按钮（非 input[type='file']）。
+        适用于自定义上传按钮（非 input[type='file']），点击按钮触发原生文件选择对话框并上传文件。
 
         Args:
             locator: 触发文件选择的按钮定位器
@@ -77,7 +77,7 @@ class FileMixin:
         normalized_file_path = self._normalize_upload_paths(file_path)
         loc_desc = self._get_locator_description(locator)
         file_info = normalized_file_path if isinstance(normalized_file_path, str) else f"{len(normalized_file_path)} 个文件"
-        self.logger.info(f"尝试点击按钮并上传文件: {loc_desc}, 文件: {file_info}")
+        self.logger.info(f"尝试点击按钮触发原生文件选择对话框并上传文件: {loc_desc}, 文件: {file_info}")
 
         final_timeout = self._resolve_timeout(timeout, self._get_element(locator))
 
@@ -87,4 +87,4 @@ class FileMixin:
         file_chooser = fc_info.value
         self.logger.info("捕获到文件选择对话框")
         file_chooser.set_files(normalized_file_path, timeout=final_timeout)
-        self.logger.info(f"成功上传文件: {file_info}")
+        self.logger.info(f"成功点击按钮触发原生文件选择对话框并上传文件: {file_info}")

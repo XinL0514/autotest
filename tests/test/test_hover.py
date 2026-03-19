@@ -1,14 +1,11 @@
 import allure
-import pytest
 from playwright.sync_api import Page
 from pages.modules.test.test_page import TestPage
 from pages.modules.test.hover_page import HoverPage
-from utils.data_loader import DataLoader
 from utils.logger import Logger
 from utils.assertion import Assertion
-from utils.time_utils import timeStamp
-logger = Logger.get_logger("TestMar")
-assertion = Assertion("TestMar")
+logger = Logger.get_logger("TestHover")
+assertion = Assertion("TestHover")
 
 
 @allure.feature("悬停")

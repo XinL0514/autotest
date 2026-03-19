@@ -1,13 +1,9 @@
 import allure
-import pytest
 from playwright.sync_api import Page
 from pages.modules.test.test_page import TestPage
-from pages.modules.test.hover_page import HoverPage
-from utils.data_loader import DataLoader
 from pages.modules.test.drag_page import DragPage
 from utils.logger import Logger
 from utils.assertion import Assertion
-from utils.time_utils import timeStamp
 logger = Logger.get_logger("TestDrag")
 assertion = Assertion("TestDrag")
 

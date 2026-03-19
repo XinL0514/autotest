@@ -1,13 +1,8 @@
 import allure
-import pytest
 from playwright.sync_api import Page
-from pages.common.uploadfile import upload_page
 from pages.modules.test.test_page import TestPage
-from pages.common.uploadfile.upload_page import UploadPage
-from utils.data_loader import DataLoader
 from utils.logger import Logger
 from utils.assertion import Assertion
-from utils.time_utils import timeStamp
 logger = Logger.get_logger("TestUpload")
 assertion = Assertion("TestUpload")
 
@@ -21,7 +16,8 @@ class TestUpload:
     def test_upload_file(self, page: Page):
         test_page = TestPage(page)
         test_page.open()
-        test_page.click_switch_to_upload_file_page2()
+        test_page.click_switch_to_upload_file_page()
+        # 等待原生上传窗口出来
         test_page.wait_for_selector(test_page.UPLOADFILEINPUT, timeout=5000)
         url = test_page.page.url
         logger.info(f"上传文件页面URL: {url}")

@@ -42,12 +42,9 @@ class TestPage(BasePage):
     
     def frame_click_link(self):
         self.frame_click(self.FRAMELOCATOR, self.FREAMLINK)
-        
-    # def click_switch_to_upload_file_page(self):
-    #     new_page = self.click_and_handle_new_page(self.UPLOADFILEBTN)
-    #     return new_page
-    
-    def click_switch_to_upload_file_page2(self):
+
+
+    def click_switch_to_upload_file_page(self):
         self.click(self.UPLOADFILEBTN)
     
     def click_upload_file_input(self, file_name: str = DEFAULT_UPLOAD_FILE_NAME):
