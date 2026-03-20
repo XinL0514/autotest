@@ -5,6 +5,7 @@ from utils.data_loader import DataLoader
 from utils.logger import Logger
 from utils.assertion import Assertion
 from utils.time_utils import timeStamp
+
 logger = Logger.get_logger("TestMar")
 assertion = Assertion("TestMar")
 
@@ -21,13 +22,16 @@ class TestMar:
         mar_page = MarPage(authenticated_page)
         mar_page.open()
         mar_page.click_mar_tab()
-        checked = mar_page.add_medication_record(mar_name, mar_data["mar_dosage"], mar_data["mar_frequency"], mar_data["mar_purpose"], mar_data["mar_side_effects"])
-        assertion.assert_true(checked, "当前还在使用是否是选中")
+        mar_page.add_medication_record(
+            mar_name,
+            mar_data["mar_dosage"],
+            mar_data["mar_frequency"],
+            mar_data["mar_purpose"],
+            mar_data["mar_side_effects"]
+        )
+        assertion.assert_is_checked(mar_page, mar_page.MAR_STILL_USING_CHECKBOX, "当前仍在使用复选框默认选中验证")
         mar_page.click_save_btn()
-        mar_page.wait_for_selector(mar_page.MEDICATION_NAME, timeout=5000)
-        medication_name = mar_page.get_medication_name()
-        assertion.assert_equal(medication_name, mar_name, "药物名称是否正确")
-        deleted_success_dialog = mar_page.delete_last_medication()
-        assertion.assert_true(deleted_success_dialog, "删除是否成功")
-        deleted_medication_name = mar_page.get_medication_name()
-        assertion.assert_not_equal(deleted_medication_name, mar_name, "删除后药物名称是否正确")
+        assertion.assert_has_text(mar_page, mar_page.MEDICATION_NAME, mar_name, "新增用药记录名称验证")
+        mar_page.delete_last_medication()
+        assertion.assert_is_display(mar_page, mar_page.DELETE_SUCCESS_BUTTON, "删除成功提示验证")
+        assertion.assert_not_has_text(mar_page, mar_page.MEDICATION_NAME, mar_name, "删除后最新药物名称不应仍为刚创建记录")

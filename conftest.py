@@ -9,12 +9,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import allure
 import pytest
-from playwright.sync_api import Browser, BrowserContext
-from config.config import HEADLESS, BASE_URL
+from playwright.sync_api import Browser, BrowserContext, expect
+from config.config import HEADLESS, BASE_URL, TIMEOUT
 import time
 import os
 import hashlib
 from datetime import datetime
+
+expect.set_options(timeout=TIMEOUT)
 
 
 # ========== 认证状态管理配置 ==========

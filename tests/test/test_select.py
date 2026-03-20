@@ -3,6 +3,7 @@ from playwright.sync_api import Page
 from pages.modules.test.select_page import SelectPage
 from utils.logger import Logger
 from utils.assertion import Assertion
+
 logger = Logger.get_logger("TestSelect")
 assertion = Assertion("TestSelect")
 
@@ -18,4 +19,9 @@ class TestSelect:
         test_page.open()
         test_page.click_select_page()
         test_page.click_select_button()
-        test_page.page.wait_for_load_state("domcontentloaded")
+        assertion.assert_has_text(
+            test_page, test_page.SELECTED_OPTION,
+            test_page.DEFAULT_OPTION_VALUE,
+            "下拉框默认测试选项值验证"
+        )
+        # page.wait_for_timeout(5000)

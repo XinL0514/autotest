@@ -1,25 +1,18 @@
 from pages.base_page import BasePage
-from config.config import BASE_URL
 from utils.element import Element
-from utils.logger import Logger
-logger = Logger.get_logger("JumpPage")
-
 
 
 class JumpPage(BasePage):
-    JUMPBTN = Element("text",("Window Open Test"), desc="跳转按钮", exact=True)
-    VER = "[name='top']"
-    FRAMELOCATOR = Element("role", ("link", "Link Test"), desc="跳转按钮", exact=True)
-    
-        
-    def jump_to_new_page(self):
-        new_page = self.click_and_handle_new_page(self.JUMPBTN)
-        return new_page
-    
-    def verify_page(self):
-       self.frame_click(self.VER, self.FRAMELOCATOR)
-        
+    JUMP_BTN = Element("text", "Window Open Test", desc="跳转按钮", exact=True)
+    TOP_FRAME = "[name='top']"   # iframe CSS选择器
+    TOP_FRAME_LINK = Element("role", ("link", "Link Test"), desc="顶部frame中的Link Test链接", exact=True)
 
-    # def get_test_frame_text(self):
-    #     return self.get_text(self.TESTFREAM)
-    
+    def jump_to_new_page(self):
+        return self.click_and_handle_new_page(self.JUMP_BTN)
+
+    def get_top_frame(self):
+        """返回顶部 frame 上下文，供测试中操作或断言 frame 内元素。"""
+        return self.frame(self.TOP_FRAME)
+
+    def verify_page(self):
+        self.frame(self.TOP_FRAME).click(self.TOP_FRAME_LINK)

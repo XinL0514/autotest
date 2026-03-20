@@ -18,10 +18,8 @@ class TestBloodSubmit:
     @allure.description("使用正常范围的血常规指标，验证AI分析成功")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_submit_normal_blood(self, authenticated_page: Page):
-        """测试正常范围的血常规数据提交"""
         blood_data = DataLoader.get_test_data("blood/blood_data.yaml", "normal_blood")
         blood_page = BloodEntryPage(authenticated_page)
-
         blood_page.open()
         blood_page.submit_blood_entry(
             plt=blood_data["plt"],
@@ -29,6 +27,9 @@ class TestBloodSubmit:
             rbc=blood_data["rbc"],
             hgb=blood_data["hgb"]
         )
-
-        authenticated_page.wait_for_load_state("networkidle")
+        assertion.assert_contains_text(
+            blood_page, blood_page.SUCCESS_MESSAGE,
+            blood_data["expected_result"],
+            "血常规提交成功提示验证"
+        )
         logger.info("血常规数据提交成功")

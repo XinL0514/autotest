@@ -6,6 +6,7 @@ from utils.element import Element
 class SelectPage(BasePage):
     SELECT_PAGE_LINK = Element("role", ("link", "Select Test"), desc="选择页面")
     SELECT_BUTTON = Element("xpath", "//select[@id='s3Id']", desc="选择入口")
+    SELECTED_OPTION = Element("css", "#s3Id option:checked", desc="当前选中的选项")
     DEFAULT_OPTION_INDEX = 3
     DEFAULT_OPTION_VALUE = "o3"
 

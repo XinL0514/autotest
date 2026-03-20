@@ -1,9 +1,11 @@
 import allure
+import re
 from playwright.sync_api import Page
 from pages.modules.test.test_page import TestPage
 from pages.modules.test.drag_page import DragPage
 from utils.logger import Logger
 from utils.assertion import Assertion
+
 logger = Logger.get_logger("TestDrag")
 assertion = Assertion("TestDrag")
 
@@ -20,4 +22,9 @@ class TestDrag:
         test_page.click_drag_page()
         drag_page = DragPage(page)
         drag_page.drag_to_btn()
-        drag_page.page.wait_for_load_state("domcontentloaded")
+        assertion.assert_has_text(drag_page, drag_page.DROP_TARGET, "dropped", "拖拽目标区域文本更新验证")
+        assertion.assert_has_class(
+            drag_page, drag_page.DROP_TARGET,
+            re.compile(r".*dropped.*"),
+            "拖拽目标区域样式更新验证"
+        )

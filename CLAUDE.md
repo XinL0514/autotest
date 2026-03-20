@@ -17,16 +17,17 @@ Web UI automation framework using Python + Playwright + Pytest with Page Object 
 autotest/
 ├── config/config.py              # Global config (BASE_URL, TIMEOUT, HEADLESS)
 ├── pages/
-│   ├── base_page.py              # BasePage (inherits 9 Mixins)
+│   ├── base_page.py              # BasePage (inherits 8 Mixins) + frame() method
+│   ├── frame_context.py          # FrameContext — iframe proxy, same API as BasePage
 │   ├── mixins/                   # LocatorMixin, ActionMixin, SelectMixin, FileMixin,
-│   │                             # WindowMixin, NavigationMixin, IframeMixin, DialogMixin, DragMixin
+│   │                             # WindowMixin, NavigationMixin, DialogMixin, DragMixin
 │   ├── common/                   # Shared page objects (login, upload)
 │   │   ├── login/login_page.py
 │   │   └── uploadfile/upload_page.py
 │   └── modules/                  # Feature modules (mar, blood, test)
 ├── tests/                        # Test cases (mirrors pages/modules structure)
 ├── utils/
-│   ├── assertion.py              # Assertion class
+│   ├── assertion.py              # Assertion class (Playwright expect based)
 │   ├── element.py                # Element locator config class
 │   ├── logger.py                 # Logger utility
 │   ├── data_loader.py            # YAML test data loader
@@ -34,7 +35,7 @@ autotest/
 │   └── time_utils.py             # Time utilities
 ├── test_data/                    # YAML test data + auth_state.json
 ├── conftest.py                   # Fixtures (page, authenticated_page, authenticated_state)
-└── pytest.ini                    # Pytest options
+└── pytest.ini                    # Pytest options (addopts controls headed/headless)
 ```
 
 ## Core Conventions
@@ -42,20 +43,32 @@ autotest/
 ### 🔴 Critical Rules (Must Follow)
 
 **1. Always Use `Assertion` Class — Never use native `assert`**
+
+All assertions are based on Playwright `expect` and provide auto-wait, Allure steps, and detailed error output.
+
 ```python
 from utils.assertion import Assertion
 assertion = Assertion()
-assertion.assert_equal(actual, expected, "Verify login success")
 ```
 
-Available assertion methods:
-- `assert_equal(actual, expected, message)` / `assert_not_equal`
-- `assert_contains(actual, expected, message)` / `assert_not_contains`
-- `assert_true(condition, message)` / `assert_false`
-- `assert_greater(actual, expected, message)` / `assert_less`
-- `assert_in(item, items, message)`
-- `assert_is_display(page, selector, message)` / `assert_not_display`
-- `assert_is_checked(page, selector, message)` / `assert_is_unchecked`
+Available assertion methods — all follow `(page_obj, element, message)` signature:
+
+| Method | Playwright equivalent | Use case |
+|---|---|---|
+| `assert_is_display(page_obj, element, message)` | `to_be_visible()` | 元素可见 |
+| `assert_not_display(page_obj, element, message)` | `not_to_be_visible()` | 元素不可见 |
+| `assert_is_checked(page_obj, element, message)` | `to_be_checked()` | 复选框选中 |
+| `assert_is_unchecked(page_obj, element, message)` | `not_to_be_checked()` | 复选框未选中 |
+| `assert_has_text(page_obj, element, text, message)` | `to_have_text()` | 文本完全匹配 |
+| `assert_not_has_text(page_obj, element, text, message)` | `not_to_have_text()` | 文本不匹配 |
+| `assert_contains_text(page_obj, element, text, message)` | `to_contain_text()` | 文本包含 |
+| `assert_has_value(page_obj, element, value, message)` | `to_have_value()` | 输入框/select值（支持正则） |
+| `assert_has_css(page_obj, element, prop, value, message)` | `to_have_css()` | CSS属性值 |
+| `assert_has_class(page_obj, element, pattern, message)` | `to_have_class()` | CSS class（支持正则） |
+| `assert_has_url(page, url_pattern, message)` | `to_have_url()` | 页面URL（支持正则） |
+| `assert_is_display_raw(locator, message)` | `to_be_visible()` | 直接传入已解析的Locator（frame等特殊场景） |
+
+`expect_that(locator, description)` 作为低级扩展口保留，遇到没有具名方法的断言时使用。
 
 **2. Choose Correct Page Fixture**
 - Tests WITHOUT login: `def test_foo(self, page: Page):`
@@ -81,31 +94,27 @@ BasePage provides `self.page`, `self.timeout`, and `self.logger` automatically.
 
 ### 🟡 Important Patterns
 
-**5. Use `Element` Class for Locators**
+**5. Use `Element` Class for All Locators**
 
-`Element` is the preferred way to define locators in page objects:
+`Element` is the **only** way to define locators in page objects. Never use raw strings or tuples.
+
 ```python
 from utils.element import Element
 
-# Basic usage - supports both positional and keyword arguments
-BTN_SUBMIT = Element("role", ("button",), desc="Submit button")
+# Role locator
 BTN_LOGIN = Element("role", ("button", "登录"), desc="Login button")
 
-# Or use keyword arguments (more explicit)
-BTN_SUBMIT = Element(by="role", value=("button",), desc="Submit button")
-
-# CSS/XPath - string format
+# CSS / XPath
 INPUT_NAME = Element("css", "#username", desc="Username input")
 XPATH_ELEM = Element("xpath", "//div[@class='content']", desc="Content div")
 
-# Text/placeholder - string format
+# Text / placeholder
 USERNAME = Element("placeholder", "请输入用户名", desc="Username", exact=True)
 
 # With filter_params
-ROW_ITEM = Element("role", ("row",), desc="Table row",
-                   filter_params={"has_text": "John"})
+ROW_ITEM = Element("role", ("row",), desc="Table row", filter_params={"has_text": "John"})
 
-# With nth/first/last
+# With nth / first / last
 FIRST_ROW = Element("role", ("row",), desc="First row", nth=0)
 LAST_ROW  = Element("role", ("row",), desc="Last row", last=True)
 
@@ -115,9 +124,38 @@ SLOW_ELEM = Element("css", ".loading", desc="Loading", timeout=60000)
 
 Supported `by` values: `role`, `text`, `placeholder`, `label`, `testid`, `css`, `xpath`, `title`, `alt_text`
 
-Locator timeout priority: method arg > `Element.timeout` > `BasePage.timeout`
+**Exception**: iframe CSS selectors passed to `page_obj.frame(css)` stay as plain strings because
+they are used by Playwright's `frame_locator()`, not by the element locator system.
 
-**6. BasePage Mixin Methods Reference**
+**6. iframe 操作 — 使用 `frame()` 代理**
+
+`BasePage.frame(css)` 返回一个 `FrameContext`，其 API 与普通页面**完全相同**，无需维护两套方法。
+
+```python
+# 在 page object 内部
+FRAME_LOCATOR = '[src="index.htm"] >> nth=0'  # iframe CSS selector（plain string）
+
+def click_in_frame(self):
+    self.frame(self.FRAME_LOCATOR).click(self.SOME_ELEMENT)
+
+def get_text_in_frame(self):
+    return self.frame(self.FRAME_LOCATOR).get_text(self.TEXT_ELEMENT)
+
+# 需要对外暴露 frame 供测试断言时
+def get_main_frame(self):
+    return self.frame(self.FRAME_LOCATOR)
+```
+
+```python
+# 在测试中
+frame = page_obj.get_main_frame()
+assertion.assert_is_display(frame, page_obj.ELEMENT, "描述")   # 与普通断言完全相同
+
+# frame 操作完成后直接用 page_obj 回到主页面，无需任何"切换"
+page_obj.click(MAIN_ELEMENT)
+```
+
+**7. BasePage Mixin Methods Reference**
 
 `ActionMixin`:
 - `navigate(url, wait_until)` — navigate to URL
@@ -135,20 +173,14 @@ Locator timeout priority: method arg > `Element.timeout` > `BasePage.timeout`
 - `select_option(locator, value/label/index, timeout)` — native `<select>`
 - `click_select_option(trigger_locator, option_locator, option_text, timeout)` — custom dropdown
 
-Other Mixins: `FileMixin` (upload), `WindowMixin` (multi-window), `NavigationMixin`, `IframeMixin`, `DialogMixin`, `DragMixin`
+Other Mixins: `FileMixin` (upload), `WindowMixin` (multi-window), `NavigationMixin`, `DialogMixin`, `DragMixin`
 
-**7. Load Test Data via DataLoader**
+**8. Load Test Data via DataLoader**
 ```python
 from utils.data_loader import DataLoader
 # Path is relative to test_data/ directory
 data = DataLoader.get_test_data("login/login_data.yaml", "valid_user")
 username = data["username"]
-```
-
-**8. Initialize Logger per Class**
-```python
-from utils.logger import Logger
-self.logger = Logger.get_logger(self.__class__.__name__)
 ```
 
 **9. Use ExceptionHandler Decorator on Page Methods**
@@ -189,8 +221,10 @@ pytest --browser firefox
 pytest --browser webkit
 
 # Headed/headless mode
-pytest --headed                           # Override config.HEADLESS
-pytest                                    # Use config.HEADLESS setting
+# Edit pytest.ini addopts: add --headed (headed) or remove it (headless)
+# Or override on command line:
+pytest --headed                           # headed, overrides pytest.ini
+pytest                                    # use pytest.ini default
 
 # Trace mode (for debugging)
 pytest --trace-mode=on                    # Save trace for all tests
@@ -201,6 +235,10 @@ pytest --trace-mode=off                   # No trace (default)
 pytest --alluredir=allure-results
 allure serve allure-results
 ```
+
+**Headed / Headless Control**
+- `pytest.ini addopts` — controls default behavior for both IDE and CLI (higher priority)
+- `config.py HEADLESS` — fallback when `--headed` is not in addopts
 
 **Authentication State Management**
 - Login state saved to: `test_data/auth_state.json`

@@ -20,8 +20,12 @@ class TestLogin:
         login_page = LoginPage(page)
         login_page.open()
         login_page.login(success_data["username"], success_data["password"])
-        success = login_page.get_success_message()
-        assertion.assert_equal(success, success_data["expected_success"], "登录成功消息验证")
+        assertion.assert_has_text(
+            login_page,
+            login_page.LOGIN_SUCCESS,
+            success_data["expected_success"],
+            "登录成功消息验证"
+        )
 
     @allure.story("登录失败")
     @allure.title("测试用户使用无效凭证登录")
@@ -33,5 +37,4 @@ class TestLogin:
         login_page = LoginPage(page)
         login_page.open()
         login_page.login(invalid_data["username"], invalid_data["password"])
-        error = login_page.get_error_message()
-        assertion.assert_contains(error, invalid_data["expected_error"], "登录失败错误消息验证")        
+        assertion.assert_contains_text(login_page, login_page.ERROR_MESSAGE, invalid_data["expected_error"], "登录失败错误消息验证")

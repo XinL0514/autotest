@@ -1,9 +1,13 @@
 import allure
+import re
 from playwright.sync_api import Page
 from pages.modules.test.test_page import TestPage
 from pages.modules.test.jump_page import JumpPage
+from utils.assertion import Assertion
 from utils.logger import Logger
+
 logger = Logger.get_logger("TestJumping")
+assertion = Assertion("TestJumping")
 
 
 @allure.feature("窗口跳转")
@@ -19,5 +23,10 @@ class TestJumping:
         jump_page = JumpPage(new_page)
         url = jump_page.page.url
         logger.info(f"跳转页面URL: {url}")
-        jump_page.verify_page()
-        jump_page.page.wait_for_load_state("domcontentloaded")
+        assertion.assert_has_url(
+            jump_page.page,
+            re.compile(r".*/framesTest\.htm$"),
+            "新窗口URL应跳转到 framesTest 页面"
+        )
+        top_frame = jump_page.get_top_frame()
+        assertion.assert_is_display(top_frame, jump_page.TOP_FRAME_LINK, "新窗口顶部 frame 中 Link Test 链接可见验证")
