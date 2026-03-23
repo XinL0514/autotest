@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Web UI automation framework using Python + Playwright + Pytest with Page Object Model (POM) pattern.
 
-- **Base URL**: `https://sahitest.com/demo/index.htm`
-- **Browser**: Chromium (headed mode by default)
+- **Base URL**: configured in `config/config.py` (current value: `http://101.200.193.143/`)
+- **Browser**: Chromium by default via `pytest-playwright`
 - **Timeout**: 30000ms
 - **Reports**: Allure
 
@@ -16,16 +16,19 @@ Web UI automation framework using Python + Playwright + Pytest with Page Object 
 ```
 autotest/
 ├── config/config.py              # Global config (BASE_URL, TIMEOUT, HEADLESS)
+├── fixtures/
+│   ├── page_factory.py           # Shared page/tracing creation logic
+│   └── business_auth.py          # Business login state fixtures
 ├── pages/
 │   ├── base_page.py              # BasePage (inherits 8 Mixins) + frame() method
 │   ├── frame_context.py          # FrameContext — iframe proxy, same API as BasePage
 │   ├── mixins/                   # LocatorMixin, ActionMixin, SelectMixin, FileMixin,
 │   │                             # WindowMixin, NavigationMixin, DialogMixin, DragMixin
-│   ├── common/                   # Shared page objects (login, upload)
+│   ├── common/                   # Shared page objects (login)
 │   │   ├── login/login_page.py
-│   │   └── uploadfile/upload_page.py
 │   └── modules/                  # Feature modules (mar, blood, test)
 ├── tests/                        # Test cases (mirrors pages/modules structure)
+│   └── conftest.py               # Exposes business auth fixtures to tests/
 ├── utils/
 │   ├── assertion.py              # Assertion class (Playwright expect based)
 │   ├── element.py                # Element locator config class
@@ -34,8 +37,8 @@ autotest/
 │   ├── exception_handler.py      # Exception handler decorator
 │   └── time_utils.py             # Time utilities
 ├── test_data/                    # YAML test data + auth_state.json
-├── conftest.py                   # Fixtures (page, authenticated_page, authenticated_state)
-└── pytest.ini                    # Pytest options (addopts controls headed/headless)
+├── conftest.py                   # Root fixtures (page, tracing, failure attachments)
+└── pytest.ini                    # Pytest discovery options
 ```
 
 ## Core Conventions
@@ -75,6 +78,7 @@ Available assertion methods — all follow `(page_obj, element, message)` signat
 - Tests WITH login: `def test_foo(self, authenticated_page: Page):`
 
 The `authenticated_page` fixture automatically handles login state management via `authenticated_state` session fixture.
+These business auth fixtures are implemented in `fixtures/business_auth.py` and imported into the test tree by `tests/conftest.py`.
 
 **3. Follow Modular Structure** — When adding a new feature module (e.g., "reports"):
 - `pages/modules/reports/reports_page.py` — Page object class
@@ -221,10 +225,9 @@ pytest --browser firefox
 pytest --browser webkit
 
 # Headed/headless mode
-# Edit pytest.ini addopts: add --headed (headed) or remove it (headless)
-# Or override on command line:
-pytest --headed                           # headed, overrides pytest.ini
-pytest                                    # use pytest.ini default
+# Default headless behavior comes from config/config.py
+pytest --headed                           # headed, overrides config
+pytest                                    # uses config/config.py HEADLESS fallback
 
 # Trace mode (for debugging)
 pytest --trace-mode=on                    # Save trace for all tests
@@ -237,27 +240,27 @@ allure serve allure-results
 ```
 
 **Headed / Headless Control**
-- `pytest.ini addopts` — controls default behavior for both IDE and CLI (higher priority)
-- `config.py HEADLESS` — fallback when `--headed` is not in addopts
+- `config/config.py HEADLESS` — default fallback for browser launch
+- `pytest --headed` — explicit headed override on the command line
 
 **Authentication State Management**
 - Login state saved to: `test_data/auth_state.json`
 - Reset login: Delete `auth_state.json`
 - First run: Login executes once and saves state; subsequent runs reuse it
-- Auto-refresh: State expires after 1 hour (configurable via `AUTH_STATE_EXPIRY` in conftest.py)
+- Auto-refresh: State expires after 1 hour (configurable via `AUTH_STATE_EXPIRY` in `fixtures/business_auth.py`)
 - Online validation: Disabled by default (set `ENABLE_AUTH_VALIDATION=True` to enable)
-- Parallel testing: xdist workers get isolated auth state files (`auth_state_worker_*.json`)
+- Parallel testing: xdist workers get isolated auth state files (`auth_state_<worker>.json`)
 
-**conftest.py Configuration**
-Key settings in conftest.py:
-- `AUTH_STATE_EXPIRY = 60 * 60` — Auth state validity (1 hour)
-- `ENABLE_AUTH_VALIDATION = False` — Online validation toggle
-- `LOGIN_SUCCESS_SELECTOR = "button:has-text('用药记录')"` — Element to verify login
-- `TRACE_DIR = Path(__file__).parent / "test-results"` — Trace file location
+**Fixture Configuration**
+Key settings are split by responsibility:
+- Root `conftest.py` — generic `page` fixture, trace attachment, screenshot attachment
+- `fixtures/page_factory.py` — shared traced page creation and `TRACE_DIR`
+- `fixtures/business_auth.py` — `AUTH_STATE_EXPIRY`, `ENABLE_AUTH_VALIDATION`, login-state reuse
+- `pages/common/login/login_page.py` — login success marker via `HOME_READY_MARKER`
 
 **Fixtures Available**
 - `page` — Clean browser page without login
-- `authenticated_page` — Browser page with login state loaded
-- `authenticated_state` — Session-level fixture that manages login state
+- `authenticated_page` — Business browser page with login state loaded
+- `authenticated_state` — Session-level business auth-state fixture
 - `browser_context_args` — Viewport config (1920x1080)
 - `browser_type_launch_args` — Browser launch args (headless mode)
