@@ -34,9 +34,6 @@ class MarPage(BasePage):
     DELETE_FIRST_MEDICATION_BUTTON = Element("role", ("button", "删除"), desc="删除药物按钮--第一个", first=True)
     DELETE_SUCCESS_BUTTON = Element("text", "用药记录删除成功", desc="删除成功提示", exact=True)
 
-    DIALOG_DELETE_BUTTON = Element("role", ("button", "确定"), desc="对话框确定按钮")
-    DIALOG_CANCEL_BUTTON = Element("role", ("button", "取消"), desc="对话框取消按钮")
-
     FIRST_MAR_RECORD = Element("css", ".mar-record-item", desc="第一条用药记录", first=True)
     SECOND_MAR_RECORD = Element("css", ".mar-record-item", desc="第二条用药记录", nth=1)
     ACTIVE_MAR_RECORD = Element(
@@ -69,9 +66,8 @@ class MarPage(BasePage):
         return self.get_text(self.MEDICATION_NAME)
 
     def delete_last_medication(self):
-        self.click_and_accept_dialog(self.DELETE_LAST_MEDICATION_BUTTON)
+        self.click_and_handle_dialog(self.DELETE_LAST_MEDICATION_BUTTON, accept=True)
         return self.is_visible(self.DELETE_SUCCESS_BUTTON)
 
     def delete_first_medication(self):
-        self.click(self.DELETE_FIRST_MEDICATION_BUTTON)
-        self.click_and_accept_dialog(self.DIALOG_DELETE_BUTTON)
+        self.click_and_accept_dialog(self.DELETE_FIRST_MEDICATION_BUTTON)

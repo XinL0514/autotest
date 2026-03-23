@@ -8,7 +8,7 @@ BASE_URL = "https://sahitest.com/demo/index.htm"
 TIMEOUT = 30000
 
 # 浏览器无头模式
-HEADLESS = False
+HEADLESS = True
 # # 有头模式运行
 #   pytest --headed
 

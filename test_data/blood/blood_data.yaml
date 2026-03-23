@@ -4,4 +4,4 @@ normal_blood:
   wbc: "80.5"
   rbc: "4.5"
   hgb: "140"
-  expected_result: "分析成功"
+  expected_result: "血常规分析完成"

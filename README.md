@@ -53,6 +53,9 @@ allure serve allure-results
 autotest/
 ├── config/
 │   └── config.py              # 全局配置（BASE_URL, TIMEOUT, HEADLESS）
+├── fixtures/
+│   ├── page_factory.py        # 通用 page/tracing 创建逻辑
+│   └── business_auth.py       # 业务专用认证 fixtures
 ├── pages/
 │   ├── base_page.py           # BasePage（继承 9 个 Mixin）
 │   ├── mixins/                # 功能 Mixin 模块
@@ -78,7 +81,7 @@ autotest/
 │   ├── exception_handler.py   # 异常处理装饰器
 │   └── time_utils.py          # 时间工具
 ├── test_data/                 # YAML 测试数据 + auth_state.json
-├── conftest.py                # Pytest fixtures
+├── conftest.py                # 根层通用 Pytest fixtures
 ├── pytest.ini                 # Pytest 配置
 └── README.md
 ```
@@ -142,9 +145,14 @@ username = data["username"]
 ### 5. Fixture 选择
 
 - **无需登录**：`def test_foo(self, page: Page):`
-- **需要登录**：`def test_foo(self, authenticated_page: Page):`
+- **业务模块需要登录**：`def test_foo(self, authenticated_page: Page):`
 
-登录状态自动保存到 `test_data/auth_state.json`，后续测试自动复用。
+说明：
+
+- 根层 [`conftest.py`](./conftest.py) 只提供与业务无关的通用 fixture。
+- `authenticated_page` / `authenticated_state` 是业务专用 fixture，定义在 [`fixtures/business_auth.py`](./fixtures/business_auth.py)。
+- 目前由 [`tests/conftest.py`](./tests/conftest.py) 统一导入，因此 `tests/` 下的测试都可以按需使用该 fixture。
+- 登录状态会保存到 `test_data/auth_state.json`（或 xdist worker 隔离文件）并复用。
 
 ### 6. Allure 装饰器
 

@@ -1,0 +1,1 @@
+from fixtures.business_auth import authenticated_page, authenticated_state
