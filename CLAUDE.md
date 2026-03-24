@@ -10,6 +10,8 @@ Web UI automation framework using Python + Playwright + Pytest with Page Object 
 - **Browser**: Chromium by default via `pytest-playwright`
 - **Timeout**: 30000ms
 - **Reports**: Allure
+- **Default runnable suites**: `tests/login/`, `tests/mar/`, `tests/blood/`
+- **Demo/example suites**: `tests/test/` requires switching `BASE_URL` to `https://sahitest.com/demo/index.htm`
 
 ## Directory Structure
 
@@ -36,7 +38,8 @@ autotest/
 │   ├── data_loader.py            # YAML test data loader
 │   ├── exception_handler.py      # Exception handler decorator
 │   └── time_utils.py             # Time utilities
-├── test_data/                    # YAML test data + auth_state.json
+├── test_data/                    # YAML test data + auth_state*.json
+├── .env.local.example           # Local auth config template for VS Code / local runs
 ├── conftest.py                   # Root fixtures (page, tracing, failure attachments)
 └── pytest.ini                    # Pytest discovery options
 ```
@@ -213,8 +216,8 @@ class TestLogin:
 
 **Common Test Commands**
 ```bash
-# Run all tests
-pytest
+# Run default business suites
+pytest tests/login tests/mar tests/blood -v
 
 # Run specific file or directory
 pytest tests/login/test_login.py
@@ -237,6 +240,9 @@ pytest --trace-mode=off                   # No trace (default)
 # Generate and view Allure report
 pytest --alluredir=allure-results
 allure serve allure-results
+
+# Run demo/example suites only after switching BASE_URL to Sahi demo
+pytest tests/test/test_select.py -v
 ```
 
 **Headed / Headless Control**
@@ -246,16 +252,20 @@ allure serve allure-results
 **Authentication State Management**
 - Login state saved to: `test_data/auth_state.json`
 - Reset login: Delete `auth_state.json`
-- First run: Login executes once and saves state; subsequent runs reuse it
-- Auto-refresh: State expires after 1 hour (configurable via `AUTH_STATE_EXPIRY` in `fixtures/business_auth.py`)
-- Online validation: Disabled by default (set `ENABLE_AUTH_VALIDATION=True` to enable)
+- First run: login executes once and saves state; subsequent runs reuse it
+- Credential source priority: process env -> `.env.auth.local` -> `.env.local`
+- Recommended local setup: copy `.env.local.example` to `.env.local` and fill `AUTOTEST_AUTH_USERNAME` / `AUTOTEST_AUTH_PASSWORD`
+- Auto-refresh: state expires after 1 hour by default (configurable via `AUTH_STATE_TTL_SECONDS` in `config/config.py` or env)
+- Online validation: disabled by default; enable with `AUTOTEST_AUTH_VALIDATE=1`
 - Parallel testing: xdist workers get isolated auth state files (`auth_state_<worker>.json`)
+- VS Code test explorer / debug configs already point to `${workspaceFolder}/.env.local`
 
 **Fixture Configuration**
 Key settings are split by responsibility:
 - Root `conftest.py` — generic `page` fixture, trace attachment, screenshot attachment
 - `fixtures/page_factory.py` — shared traced page creation and `TRACE_DIR`
-- `fixtures/business_auth.py` — `AUTH_STATE_EXPIRY`, `ENABLE_AUTH_VALIDATION`, login-state reuse
+- `fixtures/business_auth.py` — auth-state reuse, temp-state promotion, local env fallback
+- `config/config.py` — `AUTH_USERNAME_ENV`, `AUTH_PASSWORD_ENV`, `AUTH_STATE_TTL_SECONDS`, `ENABLE_AUTH_VALIDATION`
 - `pages/common/login/login_page.py` — login success marker via `HOME_READY_MARKER`
 
 **Fixtures Available**

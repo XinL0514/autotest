@@ -6,6 +6,7 @@
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
+    "python.envFile": "${workspaceFolder}/.env.local",
 
     // ========== Python 环境配置 ==========
     "python-envs.defaultEnvManager": "ms-python.python:venv",

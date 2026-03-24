@@ -1,18 +1,89 @@
 import os
 import time
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
 from playwright.sync_api import Browser, BrowserContext
 
+from config.config import (
+    AUTH_PASSWORD_ENV,
+    AUTH_STATE_TTL_SECONDS,
+    AUTH_USERNAME_ENV,
+    ENABLE_AUTH_VALIDATION,
+)
 from fixtures.page_factory import create_page_with_tracing
 from pages.common.login.login_page import LoginPage
-from utils.data_loader import DataLoader
 
 
 STORAGE_STATE_DIR = Path(__file__).resolve().parent.parent / "test_data"
-AUTH_STATE_EXPIRY = 60 * 60  # 1 hour
-ENABLE_AUTH_VALIDATION = False
+PROJECT_ROOT = STORAGE_STATE_DIR.parent
+LOCAL_ENV_FILES = (
+    PROJECT_ROOT / ".env.auth.local",
+    PROJECT_ROOT / ".env.local",
+)
+
+
+@dataclass(frozen=True)
+class AuthConfig:
+    """Business auth credentials sourced from environment variables."""
+
+    username: str
+    password: str
+
+
+@lru_cache(maxsize=1)
+def _load_local_env_values() -> dict[str, str]:
+    """Load auth-related env values from local untracked env files."""
+    env_values: dict[str, str] = {}
+
+    for file_path in LOCAL_ENV_FILES:
+        if not file_path.exists():
+            continue
+
+        for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if value and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+
+            env_values[key] = value
+
+    return env_values
+
+
+def _get_auth_value(env_name: str) -> str | None:
+    """Resolve auth config from process env first, then local env files."""
+    value = os.getenv(env_name)
+    if value:
+        return value
+    return _load_local_env_values().get(env_name)
+
+
+def get_auth_config() -> AuthConfig:
+    """Load business auth credentials from process env or local env files."""
+    username = _get_auth_value(AUTH_USERNAME_ENV)
+    password = _get_auth_value(AUTH_PASSWORD_ENV)
+
+    if not username or not password:
+        searched_files = ", ".join(str(path.name) for path in LOCAL_ENV_FILES)
+        raise RuntimeError(
+            "缺少业务认证账号，请设置环境变量或本地 env 文件: "
+            f"{AUTH_USERNAME_ENV} / {AUTH_PASSWORD_ENV}；"
+            f"已查找文件: {searched_files}"
+        )
+
+    return AuthConfig(username=username, password=password)
 
 
 def _get_storage_state_path() -> Path:
@@ -20,6 +91,11 @@ def _get_storage_state_path() -> Path:
     worker_id = os.environ.get("PYTEST_XDIST_WORKER")
     filename = f"auth_state_{worker_id}.json" if worker_id else "auth_state.json"
     return STORAGE_STATE_DIR / filename
+
+
+def _get_temp_storage_state_path(target_path: Path) -> Path:
+    """Build a temp auth state path next to the final target file."""
+    return target_path.with_suffix(f".tmp{target_path.suffix}")
 
 
 def _collect_auth_state(
@@ -38,16 +114,15 @@ def _collect_auth_state(
     return state
 
 
-def _is_auth_state_valid(browser: Browser) -> bool:
-    """Validate saved auth state by using the business login page object."""
-    storage_state_path = _get_storage_state_path()
+def _is_auth_state_valid(browser: Browser, storage_state_path: Path) -> bool:
+    """Validate a saved auth state by using the business login page object."""
     if not storage_state_path.exists():
-        print("INFO auth state file missing")
+        print(f"INFO auth state file missing: {storage_state_path}")
         return False
 
     context = None
     try:
-        print("INFO validating business auth state...")
+        print(f"INFO validating business auth state: {storage_state_path}")
         context = browser.new_context(storage_state=str(storage_state_path))
         page = context.new_page()
         login_page = LoginPage(page)
@@ -63,8 +138,29 @@ def _is_auth_state_valid(browser: Browser) -> bool:
             context.close()
 
 
-def _perform_login(browser: Browser) -> Path:
-    """Perform business login and persist storage state for reuse."""
+def _write_storage_state_to_temp(context: BrowserContext, storage_state_path: Path) -> Path:
+    """Write a new auth state to a temp file before promotion."""
+    STORAGE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = _get_temp_storage_state_path(storage_state_path)
+    if temp_path.exists():
+        temp_path.unlink()
+
+    context.storage_state(path=str(temp_path))
+    if not temp_path.exists():
+        raise RuntimeError(f"auth state 临时文件写入失败: {temp_path}")
+
+    return temp_path
+
+
+def _promote_storage_state(temp_path: Path, target_path: Path) -> Path:
+    """Atomically replace the current auth state with the new temp file."""
+    STORAGE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path.replace(target_path)
+    return target_path
+
+
+def _perform_login(browser: Browser, auth_config: AuthConfig) -> Path:
+    """Perform business login and persist a new storage state to a temp file."""
     print("\nStarting business login flow...")
 
     storage_state_path = _get_storage_state_path()
@@ -72,15 +168,13 @@ def _perform_login(browser: Browser) -> Path:
     page = context.new_page()
 
     try:
-        login_data = DataLoader.get_test_data("login/login_data.yaml", "valid_user")
         login_page = LoginPage(page)
 
         print("INFO opening login page...")
         login_page.open()
 
-        print(f"INFO input username: {login_data['username']}")
-        print(f"INFO input password: {'*' * len(login_data['password'])}")
-        login_page.login(login_data["username"], login_data["password"])
+        print("INFO submitting business login credentials...")
+        login_page.login(auth_config.username, auth_config.password)
         login_page.wait_until_logged_in(timeout=10000)
         print("OK login completed")
 
@@ -100,9 +194,9 @@ def _perform_login(browser: Browser) -> Path:
                 f"debug screenshot: {screenshot_path}"
             )
 
-        STORAGE_STATE_DIR.mkdir(parents=True, exist_ok=True)
-        context.storage_state(path=str(storage_state_path))
-        print(f"OK auth state saved to: {storage_state_path}")
+        temp_path = _write_storage_state_to_temp(context, storage_state_path)
+        print(f"OK new auth state saved to temp file: {temp_path}")
+        return temp_path
     except Exception as error:
         print(f"ERROR business login failed: {error}")
         screenshot_path = STORAGE_STATE_DIR / "login_error.png"
@@ -111,8 +205,6 @@ def _perform_login(browser: Browser) -> Path:
         raise
     finally:
         context.close()
-
-    return storage_state_path
 
 
 @pytest.fixture(scope="session")
@@ -128,33 +220,49 @@ def authenticated_state(browser: Browser) -> Path:
     if not storage_state_path.exists():
         print("INFO auth state file missing, login required")
         need_refresh = True
-    elif time.time() - os.path.getmtime(storage_state_path) > AUTH_STATE_EXPIRY:
-        elapsed_hours = (time.time() - os.path.getmtime(storage_state_path)) / 3600
+    elif time.time() - storage_state_path.stat().st_mtime > AUTH_STATE_TTL_SECONDS:
+        elapsed_hours = (time.time() - storage_state_path.stat().st_mtime) / 3600
         print(
             "INFO auth state expired "
-            f"({elapsed_hours:.1f}h old, ttl {AUTH_STATE_EXPIRY / 3600:.1f}h)"
+            f"({elapsed_hours:.1f}h old, ttl {AUTH_STATE_TTL_SECONDS / 3600:.1f}h)"
         )
         need_refresh = True
     elif ENABLE_AUTH_VALIDATION:
         print("INFO online auth validation enabled")
-        if not _is_auth_state_valid(browser):
+        if not _is_auth_state_valid(browser, storage_state_path):
             print("INFO auth state invalid, relogin required")
             need_refresh = True
         else:
-            file_age_minutes = (time.time() - os.path.getmtime(storage_state_path)) / 60
+            file_age_minutes = (time.time() - storage_state_path.stat().st_mtime) / 60
             print(f"OK using valid auth state ({file_age_minutes:.1f} min old)")
     else:
-        file_age_minutes = (time.time() - os.path.getmtime(storage_state_path)) / 60
+        file_age_minutes = (time.time() - storage_state_path.stat().st_mtime) / 60
         print(f"OK using cached auth state ({file_age_minutes:.1f} min old)")
         print("INFO skipped online auth validation")
 
     if need_refresh:
         print("\nRefreshing business auth state...")
-        if storage_state_path.exists():
-            storage_state_path.unlink()
-        result = _perform_login(browser)
-        print("=" * 60)
-        return result
+        auth_config = get_auth_config()
+        temp_state_path = _perform_login(browser, auth_config)
+        try:
+            if ENABLE_AUTH_VALIDATION:
+                print("INFO validating refreshed auth state before activation...")
+                if not _is_auth_state_valid(browser, temp_state_path):
+                    raise RuntimeError(f"新生成的 auth state 校验失败: {temp_state_path}")
+                print("OK refreshed auth state validation passed")
+
+            result = _promote_storage_state(temp_state_path, storage_state_path)
+            print(f"OK auth state activated: {result}")
+            print("=" * 60)
+            return result
+        except Exception as error:
+            if temp_state_path.exists():
+                temp_state_path.unlink()
+
+            if storage_state_path.exists():
+                print(f"WARN existing auth state preserved: {storage_state_path}")
+
+            raise RuntimeError("刷新 business auth state 失败") from error
 
     print("=" * 60 + "\n")
     return storage_state_path

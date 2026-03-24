@@ -5,7 +5,7 @@
 ## 特性
 
 - ✅ **Page Object Model** - 清晰的页面对象分层设计
-- ✅ **Mixin 架构** - 9 个功能 Mixin 提供可复用的操作能力
+- ✅ **Mixin 架构** - 8 个功能 Mixin 提供可复用的操作能力
 - ✅ **统一断言** - 自定义 Assertion 类，支持丰富的断言方法
 - ✅ **Element 定位器** - 类型安全的元素定位配置
 - ✅ **登录状态管理** - 自动保存和复用认证状态
@@ -13,38 +13,60 @@
 - ✅ **Allure 报告** - 美观的测试报告
 - ✅ **异常处理** - 统一的异常捕获和日志记录
 
+## 当前运行约定
+
+- 当前 `config/config.py` 默认 `BASE_URL` 指向业务站点：`http://101.200.193.143/`
+- 默认可直接运行的业务测试主要在：`tests/login/`、`tests/mar/`、`tests/blood/`
+- `tests/test/` 下是基于 Sahi Demo 的示例/练习用例；如果要跑这一组，需要先把 `BASE_URL` 切换到 `https://sahitest.com/demo/index.htm`
+
 ## 快速开始
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.9+
 - pip
 
 ### 安装依赖
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
 
+### 业务测试首次运行
+
+```bash
+cp .env.local.example .env.local
+# 编辑 .env.local，填入真实业务账号
+```
+
+说明：
+
+- `authenticated_page` / `authenticated_state` 依赖业务账号，但账号不再从 `test_data/login/login_data.yaml` 读取
+- 框架会优先读取进程环境变量，其次读取仓库根目录的 `.env.local` / `.env.auth.local`
+- VS Code 测试资源管理器和调试配置已经指向 `${workspaceFolder}/.env.local`
+
 ### 运行测试
 
 ```bash
-# 运行所有测试
-pytest
+# 运行业务测试（默认推荐）
+pytest tests/login tests/mar tests/blood -v
 
-# 运行指定模块
+# 运行指定文件
 pytest tests/login/test_login.py
+pytest tests/mar/test_mar.py -v -s
 
-# 使用不同浏览器
-pytest --browser firefox
-
-# 失败时保留追踪
+# 失败时保留 trace
 pytest --trace-mode=retain-on-failure
 
 # 生成并查看 Allure 报告
 pytest --alluredir=allure-results
 allure serve allure-results
+
+# 运行 Sahi Demo 示例用例前，先把 BASE_URL 改为 https://sahitest.com/demo/index.htm
+pytest tests/test/test_select.py -v
 ```
 
 ## 项目结构
@@ -52,12 +74,13 @@ allure serve allure-results
 ```
 autotest/
 ├── config/
-│   └── config.py              # 全局配置（BASE_URL, TIMEOUT, HEADLESS）
+│   └── config.py              # 全局配置（BASE_URL, TIMEOUT, HEADLESS, 认证环境变量名）
 ├── fixtures/
 │   ├── page_factory.py        # 通用 page/tracing 创建逻辑
 │   └── business_auth.py       # 业务专用认证 fixtures
 ├── pages/
-│   ├── base_page.py           # BasePage（继承 9 个 Mixin）
+│   ├── base_page.py           # BasePage（继承 8 个 Mixin）
+│   ├── frame_context.py       # FrameContext iframe 代理
 │   ├── mixins/                # 功能 Mixin 模块
 │   │   ├── locator_mixin.py   # 元素定位
 │   │   ├── action_mixin.py    # 基础操作（点击、填充、获取文本等）
@@ -65,12 +88,10 @@ autotest/
 │   │   ├── file_mixin.py      # 文件上传
 │   │   ├── window_mixin.py    # 多窗口管理
 │   │   ├── navigation_mixin.py # 页面导航
-│   │   ├── iframe_mixin.py    # iframe 操作
 │   │   ├── dialog_mixin.py    # 弹窗处理
 │   │   └── drag_mixin.py      # 拖拽操作
 │   ├── common/                # 通用页面对象
-│   │   ├── login/
-│   │   └── uploadfile/
+│   │   └── login/
 │   └── modules/               # 业务模块页面对象
 ├── tests/                     # 测试用例（镜像 pages/modules 结构）
 ├── utils/
@@ -80,7 +101,8 @@ autotest/
 │   ├── data_loader.py         # YAML 数据加载器
 │   ├── exception_handler.py   # 异常处理装饰器
 │   └── time_utils.py          # 时间工具
-├── test_data/                 # YAML 测试数据 + auth_state.json
+├── test_data/                 # YAML 测试数据 + auth_state*.json
+├── .env.local.example         # 本地认证配置模板（不提交真实值）
 ├── conftest.py                # 根层通用 Pytest fixtures
 ├── pytest.ini                 # Pytest 配置
 └── README.md
@@ -90,7 +112,7 @@ autotest/
 
 ### 1. BasePage 与 Mixin
 
-所有页面对象继承自 `BasePage`，自动获得 9 个 Mixin 的能力：
+所有页面对象继承自 `BasePage`，自动获得 8 个 Mixin 的能力：
 
 ```python
 from pages.base_page import BasePage
@@ -114,7 +136,7 @@ from utils.element import Element
 
 class LoginPage(BasePage):
     INPUT_USERNAME = Element(by="css", value="#username", desc="用户名输入框")
-    BTN_LOGIN = Element(by="role", value="button", desc="登录按钮", filter_params={"name": "Login"})
+    BTN_LOGIN = Element(by="role", value=("button", "登录"), desc="登录按钮")
 ```
 
 支持的定位方式：`role`, `text`, `placeholder`, `label`, `testid`, `css`, `xpath`, `title`, `alt_text`
@@ -127,8 +149,8 @@ class LoginPage(BasePage):
 from utils.assertion import Assertion
 
 assertion = Assertion()
-assertion.assert_equal(actual, expected, "验证登录成功")
-assertion.assert_is_display(page, selector, "验证元素可见")
+assertion.assert_has_text(login_page, login_page.LOGIN_SUCCESS, "登录成功", "验证登录成功提示")
+assertion.assert_is_display(login_page, login_page.LOGIN_BUTTON, "验证登录按钮可见")
 ```
 
 ### 4. 测试数据加载
@@ -153,6 +175,19 @@ username = data["username"]
 - `authenticated_page` / `authenticated_state` 是业务专用 fixture，定义在 [`fixtures/business_auth.py`](./fixtures/business_auth.py)。
 - 目前由 [`tests/conftest.py`](./tests/conftest.py) 统一导入，因此 `tests/` 下的测试都可以按需使用该 fixture。
 - 登录状态会保存到 `test_data/auth_state.json`（或 xdist worker 隔离文件）并复用。
+- 当缓存 state 不存在、已过期，或启用了在线校验且校验失败时，框架会读取环境变量或本地 `.env.local` / `.env.auth.local` 中的 `AUTOTEST_AUTH_USERNAME` / `AUTOTEST_AUTH_PASSWORD` 重新登录。
+- 如果你在 VS Code 测试资源管理器中执行用例，推荐在仓库根目录创建未提交的 `.env.local`，框架和 VS Code 都会优先读取它。
+- 可选环境变量：
+  - `AUTOTEST_AUTH_TTL_SECONDS`：登录态缓存有效期，默认 `3600`
+  - `AUTOTEST_AUTH_VALIDATE`：设置为 `1/true/yes/on` 时启用在线校验
+
+示例：
+
+```bash
+cp .env.local.example .env.local
+# 编辑 .env.local，填入真实账号
+pytest tests/mar/test_mar.py -v
+```
 
 ### 6. Allure 装饰器
 
@@ -164,7 +199,7 @@ class TestLogin:
     @allure.story("成功登录")
     @allure.title("使用有效凭证登录")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_login_success(self, authenticated_page: Page):
+    def test_login_success(self, page: Page):
         pass
 ```
 
@@ -181,9 +216,13 @@ class TestLogin:
 编辑 `config/config.py` 修改全局配置：
 
 ```python
-BASE_URL = "https://sahitest.com/demo/index.htm"
-TIMEOUT = 30000  # 毫秒
-HEADLESS = False  # True 为无头模式
+BASE_URL = "http://101.200.193.143/"
+TIMEOUT = 30000
+HEADLESS = True
+
+AUTH_USERNAME_ENV = "AUTOTEST_AUTH_USERNAME"
+AUTH_PASSWORD_ENV = "AUTOTEST_AUTH_PASSWORD"
+AUTH_STATE_TTL_SECONDS = 3600
 ```
 
 ## 常见问题
@@ -191,15 +230,21 @@ HEADLESS = False  # True 为无头模式
 **Q: 如何重置登录状态？**
 A: 删除 `test_data/auth_state.json` 文件
 
+**Q: 在 VS Code 测试资源管理器里怎么跑业务用例？**
+A: 复制 `.env.local.example` 为 `.env.local` 并填写真实账号；仓库中的 `.vscode/settings.json` 已配置 `python.envFile=${workspaceFolder}/.env.local`
+
+**Q: 为什么 `tests/test/` 里的用例跑不通？**
+A: 这组用例依赖 Sahi Demo 站点，当前默认 `BASE_URL` 是业务站点；运行前先切换 `config/config.py` 中的 `BASE_URL`
+
 **Q: 如何查看测试追踪？**
 A: 使用 `pytest --trace-mode=retain-on-failure`，失败时会保存追踪文件
 
 **Q: 如何并行运行测试？**
-A: 安装 `pytest-xdist`，使用 `pytest -n auto`
+A: 安装 `pytest-xdist` 后可使用 `pytest -n auto`；业务登录态会自动按 worker 生成 `auth_state_<worker>.json`
 
 ## 技术栈
 
-- **Python 3.8+**
+- **Python 3.9+**
 - **Playwright** - 浏览器自动化
 - **Pytest** - 测试框架
 - **Allure** - 测试报告
