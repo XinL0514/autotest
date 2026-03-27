@@ -2,13 +2,13 @@ import os
 from pathlib import Path
 
 # 测试环境配置
-BASE_URL = "http://101.200.193.143/"
+BASE_URL = "https://newbrush.com/chat/editor"
 
 # 超时时间(毫秒)
 TIMEOUT = 30000
 
 # 浏览器无头模式
-HEADLESS = True
+HEADLESS = False
 # # 有头模式运行
 #   pytest --headed
 
