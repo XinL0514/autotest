@@ -1,10 +1,9 @@
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 from playwright.sync_api import Locator
 from utils.element import Element
 
-RoleLocator = Union[Tuple[str], Tuple[str, str]]
-LocatorInput = Union[str, RoleLocator, Element]
+LocatorInput = Union[str, Element]
 
 
 class LocatorMixin:
@@ -22,9 +21,8 @@ class LocatorMixin:
         """智能定位器：自动识别定位器类型并返回 Playwright Locator
 
         Args:
-            locator: 定位器，支持三种格式：
+            locator: 定位器，支持两种格式：
                 - Element 对象（推荐）: Element("role", ("button", "登录"), desc="登录按钮")
-                - 元组，仅支持 role 定位: ("button",) 或 ("button", "登录")
                 - 字符串 "#id" 或 ".class": 使用 CSS 选择器
                 - 字符串 "//xpath": 使用 XPath
             context: 定位上下文（Page 或 FrameLocator），默认使用 self.page
@@ -32,17 +30,6 @@ class LocatorMixin:
         ctx = context or self.page
         if isinstance(locator, Element):
             return self._build_locator_from_element(locator, ctx)
-        elif isinstance(locator, tuple):
-            if len(locator) == 1:
-                role = locator[0]
-                self.logger.debug(f"使用 Role 定位器: role={role}")
-                return ctx.get_by_role(role)
-            elif len(locator) == 2:
-                role, name = locator
-                self.logger.debug(f"使用 Role 定位器: role={role}, name={name}")
-                return ctx.get_by_role(role, name=name)
-            else:
-                raise ValueError(f"元组定位器长度必须是 1 或 2，当前长度: {len(locator)}, 值: {locator}")
         elif isinstance(locator, str):
             if locator.startswith(("//", "(", "./")):
                 self.logger.debug(f"使用 XPath 定位器: {locator}")
@@ -57,14 +44,6 @@ class LocatorMixin:
         """获取定位器的描述字符串（用于日志）"""
         if isinstance(locator, Element):
             return locator.get_description()
-        elif isinstance(locator, tuple):
-            if len(locator) == 1:
-                return f"Role({locator[0]})"
-            elif len(locator) == 2:
-                role, name = locator
-                return f"Role({role}, '{name}')"
-            else:
-                raise ValueError(f"元组定位器长度必须是 1 或 2，当前长度: {len(locator)}, 值: {locator}")
         else:
             return f"'{locator}'"
 
