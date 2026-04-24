@@ -49,7 +49,7 @@ class WindowMixin:
         pages = self.page.context.pages
         self.logger.info(f"当前打开的页面数: {len(pages)}")
         for i, page in enumerate(pages):
-            self.logger.debug(f"  页面 {i}: {page.url}")
+            self.logger.info(f"  页面 {i}: {page.url}")
         return pages
 
     @allure.step("关闭所有新窗口（保留原窗口）")
@@ -100,7 +100,7 @@ class WindowMixin:
         self.logger.info(f"在 {len(all_pages)} 个页面中查找包含 '{url_pattern}' 的 URL")
 
         for i, page in enumerate(all_pages):
-            self.logger.debug(f"  页面 {i}: {page.url}")
+            self.logger.info(f"  页面 {i}: {page.url}")
 
         matched_page = None
         for page in all_pages:

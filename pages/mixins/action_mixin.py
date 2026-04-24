@@ -170,3 +170,30 @@ class ActionMixin:
         self._run_locator_method(wait_locator, "wait_for", timeout=wait_timeout, state="visible")
 
         self.logger.info(f"悬停并等待成功: {hover_desc} -> {wait_desc}")
+
+    @allure.step("按下按键")
+    @ExceptionHandler.handle_playwright_exception("按下按键")
+    def press(self, locator: LocatorInput, key: str, timeout: int = None):
+        """在元素上按下按键"""
+        loc_desc = self._get_locator_description(locator)
+        self.logger.info(f"尝试按键: {loc_desc}, 按键: {key}")
+        self._run_locator_method(locator, "press", key, timeout=timeout)
+        self.logger.info(f"成功按键: {loc_desc}, 按键: {key}")
+
+    @allure.step("清空输入框")
+    @ExceptionHandler.handle_playwright_exception("清空输入框")
+    def clear(self, locator: LocatorInput, timeout: int = None):
+        """清空输入框内容"""
+        self._execute_action(locator, "清空输入框", "clear", timeout=timeout)
+
+    @allure.step("逐字符输入")
+    @ExceptionHandler.handle_playwright_exception("逐字符输入")
+    def type(self, locator: LocatorInput, text: str, timeout: int = None, delay: int = None):
+        """逐字符输入文本"""
+        loc_desc = self._get_locator_description(locator)
+        type_kwargs = {}
+        if delay is not None:
+            type_kwargs["delay"] = delay
+        self.logger.info(f"尝试逐字符输入: {loc_desc}, 内容: {text}")
+        self._run_locator_method(locator, "type", text, timeout=timeout, **type_kwargs)
+        self.logger.info(f"成功逐字符输入: {loc_desc}")

@@ -32,10 +32,10 @@ class LocatorMixin:
             return self._build_locator_from_element(locator, ctx)
         elif isinstance(locator, str):
             if locator.startswith(("//", "(", "./")):
-                self.logger.debug(f"使用 XPath 定位器: {locator}")
+                self.logger.info(f"使用 XPath 定位器: {locator}")
                 return ctx.locator(f"xpath={locator}")
             else:
-                self.logger.debug(f"使用 CSS 定位器: {locator}")
+                self.logger.info(f"使用 CSS 定位器: {locator}")
                 return ctx.locator(locator)
         else:
             raise ValueError(f"不支持的定位器类型: {type(locator)}, 值: {locator}")
@@ -52,17 +52,17 @@ class LocatorMixin:
         base_locator = self._get_base_locator(element, context)
 
         if element.filter_params:
-            self.logger.debug(f"应用 filter: {element.filter_params}")
+            self.logger.info(f"应用 filter: {element.filter_params}")
             base_locator = base_locator.filter(**element.filter_params)
 
         if element.first:
-            self.logger.debug("应用 first()")
+            self.logger.info("应用 first()")
             base_locator = base_locator.first
         elif element.last:
-            self.logger.debug("应用 last()")
+            self.logger.info("应用 last()")
             base_locator = base_locator.last
         elif element.nth is not None:
-            self.logger.debug(f"应用 nth({element.nth})")
+            self.logger.info(f"应用 nth({element.nth})")
             base_locator = base_locator.nth(element.nth)
 
         return base_locator

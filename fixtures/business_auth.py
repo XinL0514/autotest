@@ -15,7 +15,10 @@ from config.config import (
 )
 from fixtures.page_factory import create_page_with_tracing
 from pages.common.login.login_page import LoginPage
+from utils.logger import Logger
 
+
+logger = Logger.get_logger("BusinessAuth")
 
 STORAGE_STATE_DIR = Path(__file__).resolve().parent.parent / "test_data"
 PROJECT_ROOT = STORAGE_STATE_DIR.parent
@@ -117,21 +120,21 @@ def _collect_auth_state(
 def _is_auth_state_valid(browser: Browser, storage_state_path: Path) -> bool:
     """Validate a saved auth state by using the business login page object."""
     if not storage_state_path.exists():
-        print(f"INFO auth state file missing: {storage_state_path}")
+        logger.info(f"auth state file missing: {storage_state_path}")
         return False
 
     context = None
     try:
-        print(f"INFO validating business auth state: {storage_state_path}")
+        logger.info(f"validating business auth state: {storage_state_path}")
         context = browser.new_context(storage_state=str(storage_state_path))
         page = context.new_page()
         login_page = LoginPage(page)
         login_page.open()
         login_page.wait_until_logged_in(timeout=10000)
-        print("OK business auth state is valid")
+        logger.info("business auth state is valid")
         return True
     except Exception as error:
-        print(f"WARN auth state validation failed: {error}")
+        logger.warning(f"auth state validation failed: {error}")
         return False
     finally:
         if context:
@@ -161,7 +164,7 @@ def _promote_storage_state(temp_path: Path, target_path: Path) -> Path:
 
 def _perform_login(browser: Browser, auth_config: AuthConfig) -> Path:
     """Perform business login and persist a new storage state to a temp file."""
-    print("\nStarting business login flow...")
+    logger.info("Starting business login flow...")
 
     storage_state_path = _get_storage_state_path()
     context = browser.new_context()
@@ -170,20 +173,20 @@ def _perform_login(browser: Browser, auth_config: AuthConfig) -> Path:
     try:
         login_page = LoginPage(page)
 
-        print("INFO opening login page...")
+        logger.info("opening login page...")
         login_page.open()
 
-        print("INFO submitting business login credentials...")
+        logger.info("submitting business login credentials...")
         login_page.login(auth_config.username, auth_config.password)
         login_page.wait_until_logged_in(timeout=10000)
-        print("OK login completed")
+        logger.info("login completed")
 
-        print("INFO collecting auth state...")
+        logger.info("collecting auth state...")
         state = _collect_auth_state(context)
         cookies = state.get("cookies", [])
         origins = state.get("origins", [])
-        print(f"INFO cookies count: {len(cookies)}")
-        print(f"INFO origins count: {len(origins)}")
+        logger.info(f"cookies count: {len(cookies)}")
+        logger.info(f"origins count: {len(origins)}")
 
         if len(cookies) == 0 and len(origins) == 0:
             screenshot_path = STORAGE_STATE_DIR / "login_debug.png"
@@ -195,13 +198,13 @@ def _perform_login(browser: Browser, auth_config: AuthConfig) -> Path:
             )
 
         temp_path = _write_storage_state_to_temp(context, storage_state_path)
-        print(f"OK new auth state saved to temp file: {temp_path}")
+        logger.info(f"new auth state saved to temp file: {temp_path}")
         return temp_path
     except Exception as error:
-        print(f"ERROR business login failed: {error}")
+        logger.error(f"business login failed: {error}")
         screenshot_path = STORAGE_STATE_DIR / "login_error.png"
         page.screenshot(path=str(screenshot_path))
-        print(f"Saved error screenshot: {screenshot_path}")
+        logger.info(f"Saved error screenshot: {screenshot_path}")
         raise
     finally:
         context.close()
@@ -210,61 +213,61 @@ def _perform_login(browser: Browser, auth_config: AuthConfig) -> Path:
 @pytest.fixture(scope="session")
 def authenticated_state(browser: Browser) -> Path:
     """Business-only authenticated storage state."""
-    print("\n" + "=" * 60)
-    print("Business auth state check start")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("Business auth state check start")
+    logger.info("=" * 60)
 
     storage_state_path = _get_storage_state_path()
     need_refresh = False
 
     if not storage_state_path.exists():
-        print("INFO auth state file missing, login required")
+        logger.info("auth state file missing, login required")
         need_refresh = True
     elif time.time() - storage_state_path.stat().st_mtime > AUTH_STATE_TTL_SECONDS:
         elapsed_hours = (time.time() - storage_state_path.stat().st_mtime) / 3600
-        print(
-            "INFO auth state expired "
+        logger.info(
+            "auth state expired "
             f"({elapsed_hours:.1f}h old, ttl {AUTH_STATE_TTL_SECONDS / 3600:.1f}h)"
         )
         need_refresh = True
     elif ENABLE_AUTH_VALIDATION:
-        print("INFO online auth validation enabled")
+        logger.info("online auth validation enabled")
         if not _is_auth_state_valid(browser, storage_state_path):
-            print("INFO auth state invalid, relogin required")
+            logger.info("auth state invalid, relogin required")
             need_refresh = True
         else:
             file_age_minutes = (time.time() - storage_state_path.stat().st_mtime) / 60
-            print(f"OK using valid auth state ({file_age_minutes:.1f} min old)")
+            logger.info(f"using valid auth state ({file_age_minutes:.1f} min old)")
     else:
         file_age_minutes = (time.time() - storage_state_path.stat().st_mtime) / 60
-        print(f"OK using cached auth state ({file_age_minutes:.1f} min old)")
-        print("INFO skipped online auth validation")
+        logger.info(f"using cached auth state ({file_age_minutes:.1f} min old)")
+        logger.info("skipped online auth validation")
 
     if need_refresh:
-        print("\nRefreshing business auth state...")
+        logger.info("Refreshing business auth state...")
         auth_config = get_auth_config()
         temp_state_path = _perform_login(browser, auth_config)
         try:
             if ENABLE_AUTH_VALIDATION:
-                print("INFO validating refreshed auth state before activation...")
+                logger.info("validating refreshed auth state before activation...")
                 if not _is_auth_state_valid(browser, temp_state_path):
                     raise RuntimeError(f"新生成的 auth state 校验失败: {temp_state_path}")
-                print("OK refreshed auth state validation passed")
+                logger.info("refreshed auth state validation passed")
 
             result = _promote_storage_state(temp_state_path, storage_state_path)
-            print(f"OK auth state activated: {result}")
-            print("=" * 60)
+            logger.info(f"auth state activated: {result}")
+            logger.info("=" * 60)
             return result
         except Exception as error:
             if temp_state_path.exists():
                 temp_state_path.unlink()
 
             if storage_state_path.exists():
-                print(f"WARN existing auth state preserved: {storage_state_path}")
+                logger.warning(f"existing auth state preserved: {storage_state_path}")
 
             raise RuntimeError("刷新 business auth state 失败") from error
 
-    print("=" * 60 + "\n")
+    logger.info("=" * 60 + "\n")
     return storage_state_path
 
 

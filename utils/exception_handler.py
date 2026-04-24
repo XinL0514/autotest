@@ -3,6 +3,7 @@
 用于统一处理 BasePage 方法中的异常，减少重复代码
 """
 import functools
+import inspect
 from playwright.sync_api import TimeoutError
 from typing import Callable, Any
 
@@ -104,28 +105,30 @@ class ExceptionHandler(BaseExceptionHandler):
             def wrapper(self, *args, **kwargs):
                 logger = getattr(self, 'logger', None)
 
-                # 尝试获取定位器描述（第一个参数通常是 locator）
                 loc_desc = None
-                if args and hasattr(self, '_get_locator_description'):
-                    try:
-                        loc_desc = self._get_locator_description(args[0])
-                        # 只在双定位器方法中尝试获取第二个定位器
-                        if len(args) > 1:
-                            second_arg = args[1]
-                            is_locator = (
-                                hasattr(second_arg, '__class__') and second_arg.__class__.__name__ == 'Element'
-                                or isinstance(second_arg, tuple)
-                                or (isinstance(second_arg, str) and
-                                    (second_arg.startswith(('/', '#', '.', 'iframe', 'button', 'input')) or '//' in second_arg))
-                            )
-                            if is_locator:
-                                try:
-                                    target_desc = self._get_locator_description(second_arg)
-                                    loc_desc = f"{loc_desc} -> {target_desc}"
-                                except Exception:
-                                    pass
-                    except Exception:
-                        loc_desc = str(args[0]) if args else "未知元素"
+                if hasattr(self, '_get_locator_description'):
+                    signature = inspect.signature(func)
+                    bound = signature.bind_partial(self, *args, **kwargs)
+
+                    locator_params = []
+                    for param_name, value in list(bound.arguments.items())[1:]:
+                        if param_name == 'locator' or param_name.endswith('_locator'):
+                            locator_params.append((param_name, value))
+
+                    if locator_params:
+                        descriptions = []
+                        for param_name, locator_value in locator_params:
+                            try:
+                                descriptions.append(self._get_locator_description(locator_value))
+                            except Exception as parse_error:
+                                fallback_desc = f"'{locator_value}'"
+                                descriptions.append(f"{param_name}={fallback_desc}")
+                                if logger:
+                                    logger.warning(
+                                        f"定位器描述解析失败: 参数={param_name}, 值={locator_value}, 错误={parse_error}"
+                                    )
+
+                        loc_desc = " -> ".join(descriptions)
 
                 try:
                     return func(self, *args, **kwargs)
@@ -138,48 +141,6 @@ class ExceptionHandler(BaseExceptionHandler):
                         return_on_error,
                         raise_assertion,
                         fallback_on_unexpected_error,
-                    )
-
-            return wrapper
-        return decorator
-
-
-class FrameExceptionHandler(BaseExceptionHandler):
-    """iframe 操作专用异常处理装饰器"""
-
-    @staticmethod
-    def handle_frame_exception(operation_name: str = None, return_on_error: Any = None):
-        """处理 iframe 操作异常
-
-        Args:
-            operation_name: 操作名称
-            return_on_error: 发生错误时的返回值
-        """
-        def decorator(func: Callable) -> Callable:
-            @functools.wraps(func)
-            def wrapper(self, frame_locator, element_locator, *args, **kwargs):
-                logger = getattr(self, 'logger', None)
-
-                # 获取元素描述
-                loc_desc = None
-                if hasattr(self, '_get_locator_description'):
-                    try:
-                        loc_desc = self._get_locator_description(element_locator)
-                    except Exception:
-                        loc_desc = str(element_locator)
-
-                error_context = f"iframe={frame_locator}, element={loc_desc}"
-
-                try:
-                    return func(self, frame_locator, element_locator, *args, **kwargs)
-                except Exception as e:
-                    return BaseExceptionHandler._handle_exception(
-                        e,
-                        operation_name or func.__name__,
-                        error_context,
-                        logger,
-                        return_on_error,
-                        raise_assertion=True
                     )
 
             return wrapper

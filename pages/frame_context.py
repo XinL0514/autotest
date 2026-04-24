@@ -21,10 +21,7 @@ class FrameContext(BasePage):
     """
 
     def __init__(self, page_obj, frame_css: str):
-        # 复用父页面实例的状态，不走 BasePage.__init__
-        self.page = page_obj.page
-        self.timeout = page_obj.timeout
-        self.logger = page_obj.logger
+        super().__init__(page_obj.page)
         self._frame = self.page.frame_locator(frame_css)
 
     def _get_locator(self, locator, context=None):

@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Union, Tuple, Dict, Any, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class Element:
     """元素定位器配置类
 
@@ -65,9 +66,9 @@ class Element:
                 f"支持的方式: {', '.join(valid_methods)}"
             )
 
-        # 确保 filter_params 是字典
-        if self.filter_params is None:
-            self.filter_params = {}
+        # 规范化 filter_params，避免外部可变对象污染
+        normalized_filter_params = dict(self.filter_params or {})
+        object.__setattr__(self, "filter_params", MappingProxyType(normalized_filter_params))
 
         # 验证互斥的链式操作
         chain_operations = [self.first, self.last, self.nth is not None]

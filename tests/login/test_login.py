@@ -33,7 +33,7 @@ class TestLogin:
     @allure.severity(allure.severity_level.NORMAL)
     def test_login_invalid_credentials(self, page: Page):
         invalid_data = DataLoader.get_test_data("login/login_data.yaml", "invalid_user")
-        logger.debug(f"测试数据: {invalid_data}")
+        logger.info(f"测试数据: {invalid_data}")
         login_page = LoginPage(page)
         login_page.open()
         login_page.login(invalid_data["username"], invalid_data["password"])
