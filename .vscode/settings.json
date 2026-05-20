@@ -2,7 +2,9 @@
     // ========== Pytest 配置 ==========
     "python.testing.pytestArgs": [
         "tests",
-        "-v"
+        "-v",
+        "--alluredir=allure-results",
+        "--clean-alluredir"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,

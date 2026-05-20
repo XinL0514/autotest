@@ -92,6 +92,23 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
+        },
+        {
+            // 配置6: Playwright Codegen - 录制脚本（使用当前 BASE_URL）
+            "name": "Record: Playwright Codegen",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tools/record.py",
+            "args": [
+                "--auth"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env.local",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         }
     ]
 }

@@ -34,15 +34,17 @@ def browser_type_launch_args(pytestconfig):
     浏览器启动参数。
     优先遵循命令行 --headed；未指定时再回退到 config.HEADLESS。
     """
+    args = ["--window-size=1920,1080"]  # 先去掉--start-maximized（macOS无效）
     if pytestconfig.getoption("--headed"):
-        return {}
-    return {"headless": HEADLESS}
-
+        return {"args": args, "headless": False}
+    return {"headless": HEADLESS, "args": args}
 
 @pytest.fixture(scope="session")
 def browser_context_args():
     """配置浏览器上下文参数"""
-    return {"viewport": {"width": 1920, "height": 1080}}
+    return {
+        "no_viewport": True  # 核心修复：让视口自动跟随窗口大小
+    }
 
 
 def _get_failure_details(report) -> str:

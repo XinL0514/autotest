@@ -69,6 +69,50 @@ allure serve allure-results
 pytest tests/test/test_select.py -v
 ```
 
+### 录制脚本（Playwright codegen）
+
+项目已内置录制脚本：`tools/record.py`，用于快速录制浏览器操作并生成 Python/pytest 脚本。
+
+```bash
+# 使用 config/config.py 的 BASE_URL 录制（默认移动端设备）
+python3 tools/record.py
+
+# 加载登录态录制
+python3 tools/record.py --auth
+
+# 桌面模式录制
+python3 tools/record.py --platform
+
+# 录制后保存登录态到 test_data/auth_state.json
+python3 tools/record.py --save-auth
+
+# 指定输出文件名（生成到 tools/recordings/）
+python3 tools/record.py --output aixmy_flow
+
+# 指定格式为 pytest
+python3 tools/record.py --format pytest
+
+# 查看设备列表
+python3 tools/record.py --list-devices
+```
+
+说明：
+
+- 录制产物目录：`tools/recordings/`
+- `--platform` 与 `--device` 不能同时使用
+- `--auth` 会校验登录态文件是否存在，不存在会直接报错
+- `--output` 只接受文件名，不支持路径
+
+### VS Code 中一键启动录制
+
+仓库 `.vscode/launch.json` 已新增调试配置：`Record: Playwright Codegen`。
+
+使用方式：
+
+1. 打开“运行和调试”面板
+2. 选择 `Record: Playwright Codegen`
+3. 点击运行，关闭录制浏览器窗口即可结束
+
 ## 项目结构
 
 ```

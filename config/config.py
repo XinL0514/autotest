@@ -2,13 +2,13 @@ import os
 from pathlib import Path
 
 # 测试环境配置
-BASE_URL = "https://sahitest.com/demo/index.htm"
+BASE_URL = "https://aixmy.miaobi.cn/#/home/profile"
 
 # 超时时间(毫秒)
 TIMEOUT = 30000
 
 # 浏览器无头模式
-HEADLESS = True
+HEADLESS = False
 # # 有头模式运行
 #   pytest --headed
 
