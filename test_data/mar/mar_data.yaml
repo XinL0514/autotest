@@ -1,7 +1,0 @@
-mar_data:
-  mar_name: "test"
-  mar_dosage: "10mg"
-  mar_frequency: "10mg"
-  mar_purpose: "10mg"
-  mar_side_effects: "10mg"
-  mar_still_using: True
