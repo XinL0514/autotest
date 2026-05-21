@@ -4,26 +4,28 @@ from utils.element import Element
 
 
 class LoginPage(BasePage):
-    USERNAME_INPUT = Element("css", "#username", desc="用户名输入框")
-    PASSWORD_INPUT = Element("css", "#password", desc="密码输入框")
-    LOGIN_BUTTON = Element("css", '[type="submit"]', desc="登录按钮")
-    ERROR_MESSAGE = Element("css", "p.text-sm.mt-1.text-red-800", desc="错误消息")
-    LOGIN_SUCCESS = Element("css", "p.text-sm.mt-1.text-green-800", desc="成功消息")
-    HOME_READY_MARKER = Element("role", ("button", "用药记录"), desc="登录后首页标记")
+    """Aixmy 平台登录页面"""
+
+    # 首页
+    MY_AVATAR = Element("role", ("img", "my"), desc="我的头像入口")
+    LOGIN_ENTRY_TEXT = Element("text", "立即登录，开始创作", desc="立即登录入口文字")
+
+    # 登录
+    EMPLOYEE_ID_INPUT = Element("role", ("textbox", "请输入您的工号"), desc="工号输入框")
+    PASSWORD_INPUT = Element("role", ("textbox", "请输入密码"), desc="密码输入框")
+    LOGIN_BUTTON = Element("role", ("button", "登录"), desc="登录按钮", exact=True)
 
     def open(self):
         self.navigate(f"{BASE_URL}")
 
-    def login(self, username: str, password: str):
-        self.fill(self.USERNAME_INPUT, username)
+    def login(self, employee_id: str, password: str):
+        self.click(self.MY_AVATAR)
+        self.click(self.LOGIN_ENTRY_TEXT)
+        self.fill(self.EMPLOYEE_ID_INPUT, employee_id)
+        self.press(self.EMPLOYEE_ID_INPUT, "Tab")
         self.fill(self.PASSWORD_INPUT, password)
         self.click(self.LOGIN_BUTTON)
+        self.page.wait_for_timeout(1000)
 
     def wait_until_logged_in(self, timeout: int = 10000):
-        self.wait_for_selector(self.HOME_READY_MARKER, timeout=timeout)
-
-    def get_error_message(self) -> str:
-        return self.get_text(self.ERROR_MESSAGE)
-
-    def get_success_message(self) -> str:
-        return self.get_text(self.LOGIN_SUCCESS)
+        self._get_locator(self.LOGIN_ENTRY_TEXT).wait_for(state="hidden", timeout=timeout)

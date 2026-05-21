@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import argparse
+import json
+import os
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -10,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config.config import BASE_URL
+from config.config import BASE_URL, AUTH_USER_JSON_ENV
 
 RECORDINGS_DIR = PROJECT_ROOT / "tools" / "recordings"
 DEFAULT_AUTH_FILE = PROJECT_ROOT / "test_data" / "auth_state.json"
@@ -67,6 +70,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--auth-file", help="自定义登录态文件路径（覆盖 --auth 默认文件）")
     parser.add_argument("--save-auth", action="store_true", help="录制结束保存登录态到 test_data/auth_state.json")
     parser.add_argument("--save-auth-file", help="自定义保存登录态路径（覆盖 --save-auth 默认文件）")
+    parser.add_argument("--business-auth", action="store_true", help="从 AUTOTEST_AUTH_USER_JSON 注入 localStorage 登录态")
 
     parser.add_argument("--output", "-o", help="输出文件名（不含 .py），默认 recording_时间戳")
     parser.add_argument("--format", "-f", choices=OUTPUT_FORMATS, default="python", help="codegen 输出格式")
@@ -90,11 +94,70 @@ def list_devices() -> int:
         return 1
 
 
-def resolve_auth_paths(args: argparse.Namespace) -> tuple[Optional[Path], Optional[Path]]:
+def _load_local_env_user_json() -> Optional[str]:
+    local_env_files = (
+        PROJECT_ROOT / ".env.auth.local",
+        PROJECT_ROOT / ".env.local",
+    )
+    for file_path in local_env_files:
+        if not file_path.exists():
+            continue
+        for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip() == AUTH_USER_JSON_ENV:
+                value = value.strip()
+                if value and value[0] == value[-1] and value[0] in {'"', "'"}:
+                    value = value[1:-1]
+                return value
+    return None
+
+
+def create_business_auth_storage(user_json: str) -> Path:
+    """将 user_json 写入临时 storage state 文件供 --load-storage 使用。"""
+    try:
+        json.loads(user_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"AUTOTEST_AUTH_USER_JSON 不是合法 JSON: {e}") from e
+
+    storage_state = {
+        "cookies": [],
+        "origins": [
+            {
+                "origin": "https://aixmy.miaobi.cn",
+                "localStorage": [{"name": "user", "value": user_json}],
+            }
+        ],
+    }
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    )
+    json.dump(storage_state, tmp, ensure_ascii=False)
+    tmp.close()
+    return Path(tmp.name)
+
+
+def resolve_auth_paths(args: argparse.Namespace) -> tuple[Optional[Path], Optional[Path], Optional[Path]]:
     load_auth = None
     save_auth = None
+    tmp_auth = None  # 临时文件，用完需删除
 
-    if args.auth_file:
+    if getattr(args, "business_auth", False):
+        user_json = os.getenv(AUTH_USER_JSON_ENV) or _load_local_env_user_json()
+        if not user_json:
+            raise ValueError(
+                f"--business-auth 需要 {AUTH_USER_JSON_ENV}，"
+                "请在 .env.local 或环境变量中设置"
+            )
+        tmp_auth = create_business_auth_storage(user_json)
+        load_auth = tmp_auth
+    elif args.auth_file:
         load_auth = Path(args.auth_file).expanduser().resolve()
     elif args.auth:
         load_auth = DEFAULT_AUTH_FILE
@@ -104,7 +167,7 @@ def resolve_auth_paths(args: argparse.Namespace) -> tuple[Optional[Path], Option
     elif args.save_auth:
         save_auth = DEFAULT_AUTH_FILE
 
-    return load_auth, save_auth
+    return load_auth, save_auth, tmp_auth
 
 
 def validate_args(args: argparse.Namespace, load_auth: Optional[Path]) -> None:
@@ -168,13 +231,19 @@ def main() -> int:
 
     try:
         output_file = build_output_path(args.output)
-        load_auth, save_auth = resolve_auth_paths(args)
+        load_auth, save_auth, tmp_auth = resolve_auth_paths(args)
         validate_args(args, load_auth)
     except Exception as exc:
         print(f"参数错误: {exc}")
         return 2
 
     cmd = build_codegen_command(args, output_file, load_auth, save_auth)
+
+    auth_label = "none"
+    if getattr(args, "business_auth", False):
+        auth_label = f"business auth (AUTOTEST_AUTH_USER_JSON → tmp storage)"
+    elif load_auth:
+        auth_label = str(load_auth)
 
     print("=" * 60)
     print("Playwright 录制（autotest）")
@@ -185,7 +254,7 @@ def main() -> int:
     print(f"Mode: {'desktop' if args.platform else 'device'}")
     if not args.platform:
         print(f"Device: {args.device or DEFAULT_DEVICE}")
-    print(f"Auth load: {load_auth if load_auth else 'none'}")
+    print(f"Auth load: {auth_label}")
     print(f"Auth save: {save_auth if save_auth else 'none'}")
     print("Command:")
     print(" ".join(cmd))
@@ -201,6 +270,9 @@ def main() -> int:
     except FileNotFoundError as exc:
         print(f"启动失败: {exc}")
         return 1
+    finally:
+        if tmp_auth and tmp_auth.exists():
+            tmp_auth.unlink(missing_ok=True)
 
     if exit_code != 0:
         print(f"录制失败，退出码: {exit_code}")

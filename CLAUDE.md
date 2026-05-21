@@ -20,7 +20,8 @@ autotest/
 ├── config/config.py              # Global config (BASE_URL, TIMEOUT, HEADLESS)
 ├── fixtures/
 │   ├── page_factory.py           # Shared page/tracing creation logic
-│   └── business_auth.py          # Business login state fixtures
+│   ├── business_auth.py          # Business login state fixtures
+│   └── aixmy_fixtures.py         # Aixmy-specific fixtures (end_class teardown)
 ├── pages/
 │   ├── base_page.py              # BasePage (inherits 8 Mixins) + frame() method
 │   ├── frame_context.py          # FrameContext — iframe proxy, same API as BasePage
@@ -37,6 +38,7 @@ autotest/
 │   ├── logger.py                 # Logger utility
 │   ├── data_loader.py            # YAML test data loader
 │   ├── exception_handler.py      # Exception handler decorator
+│   ├── http_client.py            # HTTP client (stdlib urllib, no extra deps)
 │   └── time_utils.py             # Time utilities
 ├── test_data/                    # YAML test data + auth_state*.json
 ├── .env.local.example           # Local auth config template for VS Code / local runs
@@ -212,6 +214,23 @@ class TestLogin:
         pass
 ```
 
+**11. API Teardown with `end_class` fixture (Aixmy)**
+
+For tests that enter a classroom, declare `end_class` as a parameter and register the page object after `launch_courseware`. The fixture calls the end-class API automatically after the test, even on failure.
+
+```python
+def test_foo(self, authenticated_page: Page, end_class):
+    aixmy_page = AixmyPage(authenticated_page)
+    aixmy_page.open()
+    aixmy_page.launch_courseware()
+    end_class(aixmy_page)  # register — teardown fires automatically after test
+    # ... rest of test ...
+```
+
+- `roomKey` is captured automatically from network responses during `launch_courseware`
+- Auth token priority: `AUTOTEST_AUTH_USER_JSON` env → network request headers → localStorage
+- Implemented in `fixtures/aixmy_fixtures.py`; exported via `tests/conftest.py`
+
 ### 🟢 Quick Reference
 
 **Common Test Commands**
@@ -250,27 +269,30 @@ pytest tests/test/test_select.py -v
 - `pytest --headed` — explicit headed override on the command line
 
 **Authentication State Management**
-- Login state saved to: `test_data/auth_state.json`
-- Reset login: Delete `auth_state.json`
-- First run: login executes once and saves state; subsequent runs reuse it
-- Credential source priority: process env -> `.env.auth.local` -> `.env.local`
-- Recommended local setup: copy `.env.local.example` to `.env.local` and fill `AUTOTEST_AUTH_USERNAME` / `AUTOTEST_AUTH_PASSWORD`
-- Auto-refresh: state expires after 1 hour by default (configurable via `AUTH_STATE_TTL_SECONDS` in `config/config.py` or env)
-- Online validation: disabled by default; enable with `AUTOTEST_AUTH_VALIDATE=1`
-- Parallel testing: xdist workers get isolated auth state files (`auth_state_<worker>.json`)
+- Auth is token-based via `AUTOTEST_AUTH_USER_JSON` (localStorage `user` key), not file-based `auth_state.json`
+- Credential source priority: process env `AUTOTEST_AUTH_USER_JSON` -> `.env.auth.local` -> `.env.local`
+- Recommended local setup: copy `.env.local.example` to `.env.local` and fill `AUTOTEST_AUTH_USER_JSON`
+- If token is missing or expired, framework falls back to UI login using `login_data.yaml` and writes the new token back to `.env.local`
 - VS Code test explorer / debug configs already point to `${workspaceFolder}/.env.local`
+
+**Recording with Login State**
+- Use `--business-auth` to inject `AUTOTEST_AUTH_USER_JSON` into the recording browser's localStorage
+- `python tools/record.py --platform --business-auth` — desktop mode with business auth
+- `python tools/record.py --business-auth` — mobile device mode with business auth
+- Requires `AUTOTEST_AUTH_USER_JSON` set in env or `.env.local`; temporary storage file is auto-deleted after recording
 
 **Fixture Configuration**
 Key settings are split by responsibility:
 - Root `conftest.py` — generic `page` fixture, trace attachment, screenshot attachment
 - `fixtures/page_factory.py` — shared traced page creation and `TRACE_DIR`
-- `fixtures/business_auth.py` — auth-state reuse, temp-state promotion, local env fallback
-- `config/config.py` — `AUTH_USERNAME_ENV`, `AUTH_PASSWORD_ENV`, `AUTH_STATE_TTL_SECONDS`, `ENABLE_AUTH_VALIDATION`
+- `fixtures/business_auth.py` — token injection via localStorage, UI login fallback, token writeback
+- `config/config.py` — `AUTH_USER_JSON_ENV`
 - `pages/common/login/login_page.py` — login success marker via `HOME_READY_MARKER`
 
 **Fixtures Available**
 - `page` — Clean browser page without login
 - `authenticated_page` — Business browser page with login state loaded
 - `authenticated_state` — Session-level business auth-state fixture
+- `end_class` — Aixmy post-test teardown: calls the end-class API after the test finishes (see pattern 11)
 - `browser_context_args` — Viewport config (1920x1080)
 - `browser_type_launch_args` — Browser launch args (headless mode)

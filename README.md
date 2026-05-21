@@ -12,6 +12,7 @@
 - ✅ **YAML 数据驱动** - 测试数据与代码分离
 - ✅ **Allure 报告** - 美观的测试报告
 - ✅ **异常处理** - 统一的异常捕获和日志记录
+- ✅ **HTTP Client** - 内置轻量 HTTP 客户端，支持接口级后置处理（无额外依赖）
 
 ## 当前运行约定
 
@@ -77,14 +78,11 @@ pytest tests/test/test_select.py -v
 # 使用 config/config.py 的 BASE_URL 录制（默认移动端设备）
 python3 tools/record.py
 
-# 加载登录态录制
-python3 tools/record.py --auth
-
 # 桌面模式录制
 python3 tools/record.py --platform
 
-# 录制后保存登录态到 test_data/auth_state.json
-python3 tools/record.py --save-auth
+# 带业务登录态录制（从 .env.local 的 AUTOTEST_AUTH_USER_JSON 注入）
+python3 tools/record.py --platform --business-auth
 
 # 指定输出文件名（生成到 tools/recordings/）
 python3 tools/record.py --output aixmy_flow
@@ -100,7 +98,7 @@ python3 tools/record.py --list-devices
 
 - 录制产物目录：`tools/recordings/`
 - `--platform` 与 `--device` 不能同时使用
-- `--auth` 会校验登录态文件是否存在，不存在会直接报错
+- `--business-auth`：从环境变量或 `.env.local` 读取 `AUTOTEST_AUTH_USER_JSON`，自动注入 localStorage 登录态，录制结束后临时文件自动删除；需要先确保 `.env.local` 中已配置该字段
 - `--output` 只接受文件名，不支持路径
 
 ### VS Code 中一键启动录制
@@ -121,7 +119,8 @@ autotest/
 │   └── config.py              # 全局配置（BASE_URL, TIMEOUT, HEADLESS, 认证环境变量名）
 ├── fixtures/
 │   ├── page_factory.py        # 通用 page/tracing 创建逻辑
-│   └── business_auth.py       # 业务专用认证 fixtures
+│   ├── business_auth.py       # 业务专用认证 fixtures
+│   └── aixmy_fixtures.py      # Aixmy 专用 fixtures（end_class 后置下课）
 ├── pages/
 │   ├── base_page.py           # BasePage（继承 8 个 Mixin）
 │   ├── frame_context.py       # FrameContext iframe 代理
@@ -144,6 +143,7 @@ autotest/
 │   ├── logger.py              # 日志工具
 │   ├── data_loader.py         # YAML 数据加载器
 │   ├── exception_handler.py   # 异常处理装饰器
+│   ├── http_client.py         # HTTP 客户端（标准库 urllib，无额外依赖）
 │   └── time_utils.py          # 时间工具
 ├── test_data/                 # YAML 测试数据 + auth_state*.json
 ├── .env.local.example         # 本地认证配置模板（不提交真实值）
@@ -212,12 +212,14 @@ username = data["username"]
 
 - **无需登录**：`def test_foo(self, page: Page):`
 - **业务模块需要登录**：`def test_foo(self, authenticated_page: Page):`
+- **进入课堂需要后置下课**：额外声明 `end_class`，进入课堂后调用 `end_class(aixmy_page)` 注册
 
 说明：
 
-- 根层 [`conftest.py`](./conftest.py) 只提供与业务无关的通用 fixture。
-- `authenticated_page` / `authenticated_state` 是业务专用 fixture，定义在 [`fixtures/business_auth.py`](./fixtures/business_auth.py)。
-- 目前由 [`tests/conftest.py`](./tests/conftest.py) 统一导入，因此 `tests/` 下的测试都可以按需使用该 fixture。
+- 根层 `[conftest.py](./conftest.py)` 只提供与业务无关的通用 fixture。
+- `authenticated_page` / `authenticated_state` 是业务专用 fixture，定义在 `[fixtures/business_auth.py](./fixtures/business_auth.py)`。
+- `end_class` 定义在 `fixtures/aixmy_fixtures.py`，测试结束后（无论成功/失败）自动调用下课接口，确保课堂关闭。
+- 目前由 `[tests/conftest.py](./tests/conftest.py)` 统一导入，因此 `tests/` 下的测试都可以按需使用上述 fixture。
 - 登录状态会保存到 `test_data/auth_state.json`（或 xdist worker 隔离文件）并复用。
 - 当缓存 state 不存在、已过期，或启用了在线校验且校验失败时，框架会读取环境变量或本地 `.env.local` / `.env.auth.local` 中的 `AUTOTEST_AUTH_USERNAME` / `AUTOTEST_AUTH_PASSWORD` 重新登录。
 - 如果你在 VS Code 测试资源管理器中执行用例，推荐在仓库根目录创建未提交的 `.env.local`，框架和 VS Code 都会优先读取它。
@@ -233,7 +235,24 @@ cp .env.local.example .env.local
 pytest tests/mar/test_mar.py -v
 ```
 
-### 6. Allure 装饰器
+### 6. API 后置处理（end_class）
+
+对于需要进入课堂的用例，使用 `end_class` fixture 确保测试结束后自动调用下课接口：
+
+```python
+def test_foo(self, authenticated_page: Page, end_class):
+    aixmy_page = AixmyPage(authenticated_page)
+    aixmy_page.open()
+    aixmy_page.launch_courseware()
+    end_class(aixmy_page)  # 注册，测试结束后自动下课
+    # ... 测试逻辑 ...
+```
+
+- `roomKey` 在 `launch_courseware` 期间从网络响应自动捕获
+- token 优先级：`AUTOTEST_AUTH_USER_JSON` env → 请求头拦截 → localStorage
+- 测试失败时同样会执行下课，不会遗留未关闭的课堂
+
+### 7. Allure 装饰器
 
 ```python
 import allure

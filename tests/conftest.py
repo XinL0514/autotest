@@ -1,1 +1,2 @@
 from fixtures.business_auth import authenticated_page, authenticated_state
+from fixtures.aixmy_fixtures import end_class

@@ -34,12 +34,4 @@ UPLOAD_FILES_DIR = PROJECT_ROOT / "test_data" / "files"
 DEFAULT_UPLOAD_FILE_NAME = os.getenv("UPLOAD_FILE_NAME", "upload_sample.txt")
 
 # 认证配置（仅从环境变量读取，避免将账号写入仓库）
-AUTH_USERNAME_ENV = "AUTOTEST_AUTH_USERNAME"
-AUTH_PASSWORD_ENV = "AUTOTEST_AUTH_PASSWORD"
-AUTH_STATE_TTL_SECONDS = int(os.getenv("AUTOTEST_AUTH_TTL_SECONDS", "3600"))
-ENABLE_AUTH_VALIDATION = os.getenv("AUTOTEST_AUTH_VALIDATE", "0").lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+AUTH_USER_JSON_ENV = "AUTOTEST_AUTH_USER_JSON"

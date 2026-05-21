@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional
 
-from playwright.sync_api import Browser, Page
+from playwright.sync_api import Browser, BrowserContext, Page
 
 
 TRACE_DIR = Path(__file__).resolve().parent.parent / "test-results"
@@ -19,6 +19,11 @@ def _stop_tracing(context, request, tracing_option: str) -> None:
     context.tracing.stop(path=str(trace_path))
     request.node._trace_path = trace_path
     request.node._trace_mode = tracing_option
+
+
+def _start_tracing_if_needed(context: BrowserContext, tracing_option: str) -> None:
+    if tracing_option in ["on", "retain-on-failure"]:
+        context.tracing.start(screenshots=True, snapshots=True, sources=True)
 
 
 def create_page_with_tracing(
@@ -37,8 +42,7 @@ def create_page_with_tracing(
     context = browser.new_context(**context_kwargs)
     page = context.new_page()
 
-    if tracing_option in ["on", "retain-on-failure"]:
-        context.tracing.start(screenshots=True, snapshots=True, sources=True)
+    _start_tracing_if_needed(context, tracing_option)
 
     yield page
 
@@ -46,3 +50,21 @@ def create_page_with_tracing(
         _stop_tracing(context, request, tracing_option)
 
     context.close()
+
+
+def create_page_from_existing_context_with_tracing(
+    context: BrowserContext,
+    request,
+) -> Iterator[Page]:
+    """Create a page from an existing context and apply tracing policy."""
+    tracing_option = request.config.getoption("--trace-mode")
+    page = context.new_page()
+
+    _start_tracing_if_needed(context, tracing_option)
+
+    yield page
+
+    if tracing_option in ["on", "retain-on-failure"]:
+        _stop_tracing(context, request, tracing_option)
+
+    page.close()
