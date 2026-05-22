@@ -100,7 +100,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/tools/record.py",
             "args": [
-                "--auth"
+                "--platform",
+                "--business-auth"
             ],
             "console": "integratedTerminal",
             "justMyCode": false,

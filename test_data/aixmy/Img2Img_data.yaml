@@ -1,0 +1,3 @@
+default:
+  wentu_prompt: "/文生图﻿老虎"
+  img2img_prompt: "/图生图﻿黑色的老虎"
