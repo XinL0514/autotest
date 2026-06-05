@@ -1,9 +1,9 @@
-import json
 import re
 
 from pages.base_page import BasePage
 from utils.element import Element
 from config.config import BASE_URL
+from apis.aixmy.aixmy_api import AixmyApiClient
 
 
 class AixmyPage(BasePage):
@@ -31,15 +31,13 @@ class AixmyPage(BasePage):
     # iframe CSS selector（plain string）
     CLASSROOM_IFRAME = "iframe"
 
-    _END_CLASS_API = "https://maliang.miaobi.cn/api/v2/classroom/over/course"
-
     def __init__(self, page):
         super().__init__(page)
         self.room_key: str | None = None
         self._cached_token: str | None = None
 
     # ------------------------------------------------------------------
-    # 内部：网络响应监听，捕获 roomKey
+    # 内部：网络响应监听，捕获 roomKey 和 token
     # ------------------------------------------------------------------
 
     def _on_request(self, request) -> None:
@@ -53,7 +51,6 @@ class AixmyPage(BasePage):
     def _on_response(self, response) -> None:
         if "maliang.miaobi.cn" not in response.url:
             return
-        # 从响应对应的请求里补捉 token（覆盖 localStorage 缓存）
         auth = response.request.headers.get("authorization") or response.request.headers.get("Authorization")
         if auth and auth.startswith("Bearer "):
             self._cached_token = auth[len("Bearer "):]
@@ -70,61 +67,11 @@ class AixmyPage(BasePage):
             pass
 
     # ------------------------------------------------------------------
-    # 认证 token（从 localStorage 读取）
-    # ------------------------------------------------------------------
-
-    def get_auth_token(self) -> str | None:
-        if self._cached_token:
-            return self._cached_token
-        # 兜底：env -> localStorage
-        self._cached_token = self._load_token_from_env() or self._read_token_from_localStorage()
-        return self._cached_token
-
-    def _get_device_id(self) -> str:
-        try:
-            val = self.page.evaluate(
-                "() => localStorage.getItem('deviceId') || localStorage.getItem('device_id')"
-            )
-            if val:
-                return val
-        except Exception:
-            pass
-        return "device_autotest"
-
-    # ------------------------------------------------------------------
     # 页面操作
     # ------------------------------------------------------------------
 
     def open(self):
         self.navigate(BASE_URL)
-        self._cached_token = self._load_token_from_env() or self._read_token_from_localStorage()
-
-    def _load_token_from_env(self) -> str | None:
-        from fixtures.business_auth import _get_auth_value
-        user_json = _get_auth_value("AUTOTEST_AUTH_USER_JSON")
-        if user_json:
-            try:
-                user = json.loads(user_json)
-                token = user.get("token") or user.get("accessToken")
-                if token:
-                    self.logger.info("auth token loaded from env AUTOTEST_AUTH_USER_JSON")
-                    return token
-            except Exception:
-                pass
-        return None
-
-    def _read_token_from_localStorage(self) -> str | None:
-        try:
-            user_json = self.page.evaluate("() => localStorage.getItem('user')")
-            if user_json:
-                user = json.loads(user_json)
-                token = user.get("token") or user.get("accessToken")
-                if token:
-                    self.logger.info("auth token cached from localStorage")
-                    return token
-        except Exception:
-            pass
-        return None
 
     def wait_until_ready(self, timeout: int = 60000):
         self.wait_for_selector(self.START_CLASS_BUTTON, timeout=timeout)
@@ -137,7 +84,6 @@ class AixmyPage(BasePage):
 
     def launch_courseware(self):
         self.click(self.LAUNCH_COURSEWARE_BUTTON)
-        # 监听响应以捕获 roomKey
         self.page.on("request", self._on_request)
         self.page.on("response", self._on_response)
         try:
@@ -162,38 +108,8 @@ class AixmyPage(BasePage):
     def close_classroom(self):
         self.click(self.CLASSENDS)
 
-    # ------------------------------------------------------------------
-    # 下课接口（后置处理用）
-    # ------------------------------------------------------------------
+    def get_api_client(self) -> AixmyApiClient:
+        return AixmyApiClient(self.page, self.room_key, self._cached_token)
 
     def end_class_via_api(self) -> bool:
-        """调用下课接口，确保课堂已关闭。返回是否成功。"""
-        if not self.room_key:
-            self.logger.warning("end_class_via_api: roomKey 未捕获，跳过")
-            return False
-
-        token = self.get_auth_token()
-        if not token:
-            self.logger.warning("end_class_via_api: 未获取到 auth token，跳过")
-            return False
-
-        from utils.http_client import HttpClient
-        url = f"{self._END_CLASS_API}?roomKey={self.room_key}"
-        headers = {
-            "accept": "application/json, text/plain, */*",
-            "accept-language": "zh-CN",
-            "appversion": "1.0.0",
-            "authorization": f"Bearer {token}",
-            "content-length": "0",
-            "deviceid": self._get_device_id(),
-            "devicetype": "pc",
-            "imappid": "1600079439",
-            "origin": "https://aixmy.miaobi.cn",
-            "referer": "https://aixmy.miaobi.cn/",
-        }
-        result = HttpClient.post(url, headers)
-        if result is not None:
-            self.logger.info(f"end_class_via_api: 下课成功 roomKey={self.room_key} resp={result}")
-            return True
-        self.logger.warning(f"end_class_via_api: 下课接口调用失败 roomKey={self.room_key}")
-        return False
+        return self.get_api_client().end_class()

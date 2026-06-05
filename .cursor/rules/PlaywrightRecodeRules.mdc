@@ -1,0 +1,446 @@
+---
+alwaysApply: true
+---
+
+# Playwright 录制脚本转换规则
+
+本文档用于指导 AI 将 Playwright 录制脚本（codegen 生成的代码）转换为符合本框架规范的自动化测试代码。
+
+---
+
+## 一、转换前必读
+
+### 输入
+Playwright codegen 录制产生的原始脚本，例如：
+```python
+page.goto("https://aixmy.miaobi.cn/#/home/profile")
+page.get_by_role("button", name="开始上课").click()
+page.get_by_css(".work-item > .work-thumbnail").first.click()
+page.locator("input[placeholder='请输入用户名']").fill("admin")
+```
+
+### 输出
+需要生成三个文件：
+1. `pages/modules/<模块名>/<模块名>_page.py` — Page Object 类
+2. `tests/<模块名>/test_<模块名>.py` — 测试用例
+3. `test_data/<模块名>/<模块名>_data.yaml` — 测试数据（如有输入值）
+
+---
+
+## 二、目录结构规范
+
+```
+pages/modules/<模块名>/
+    __init__.py
+    <模块名>_page.py
+
+tests/<模块名>/
+    __init__.py
+    test_<模块名>.py
+
+test_data/<模块名>/
+    <模块名>_data.yaml
+```
+
+模块名使用小写下划线，例如录制的是"课件管理"功能，模块名为 `courseware`。
+
+---
+
+## 三、Page Object 转换规则（pages 层）
+
+### 3.1 类定义
+
+```python
+# ✅ 正确
+from pages.base_page import BasePage
+from utils.element import Element
+from config.config import BASE_URL
+
+class CoursewarePage(BasePage):
+    def __init__(self, page):
+        super().__init__(page)
+```
+
+- 必须继承 `BasePage`
+- 必须调用 `super().__init__(page)`
+- 不需要手动定义 `self.page`、`self.logger`、`self.timeout`，BasePage 已提供
+
+### 3.2 元素定位器转换
+
+所有元素必须用 `Element` 类定义为类变量，**禁止在方法内使用原始字符串定位**。
+
+**录制脚本 → Element 转换对照表：**
+
+| 录制脚本写法 | Element 写法 |
+|---|---|
+| `get_by_role("button", name="登录")` | `Element("role", ("button", "登录"), desc="登录按钮")` |
+| `get_by_role("button", name="登录", exact=True)` | `Element("role", ("button", "登录"), desc="登录按钮", exact=True)` |
+| `get_by_placeholder("请输入用户名")` | `Element("placeholder", "请输入用户名", desc="用户名输入框")` |
+| `get_by_text("欢迎回来")` | `Element("text", "欢迎回来", desc="欢迎语")` |
+| `get_by_text("欢迎回来", exact=True)` | `Element("text", "欢迎回来", desc="欢迎语", exact=True)` |
+| `get_by_label("用户名")` | `Element("label", "用户名", desc="用户名输入框")` |
+| `get_by_test_id("submit-btn")` | `Element("testid", "submit-btn", desc="提交按钮")` |
+| `get_by_title("关闭")` | `Element("title", "关闭", desc="关闭按钮")` |
+| `get_by_alt_text("公司Logo")` | `Element("alt_text", "公司Logo", desc="公司Logo图片")` |
+| `locator("css=.error-msg")` | `Element("css", ".error-msg", desc="错误提示")` |
+| `locator("xpath=//button[@id='x']")` | `Element("xpath", "//button[@id='x']", desc="按钮")` |
+| `.first` | `first=True` |
+| `.last` | `last=True` |
+| `.nth(2)` | `nth=2` |
+| `.filter(has_text="复制")` | `filter_params={"has_text": "复制"}` |
+
+**命名规范：**
+- 全大写 + 下划线
+- 以元素类型结尾：`_BUTTON`、`_INPUT`、`_LINK`、`_TAB`、`_DIALOG`、`_TEXT` 等
+- 每个 Element 必须有 `desc` 参数
+
+```python
+# ✅ 正确
+START_CLASS_BUTTON = Element("role", ("button", "开始上课"), desc="开始上课按钮")
+USERNAME_INPUT = Element("placeholder", "请输入用户名", desc="用户名输入框")
+
+# ❌ 错误
+btn = Element("role", ("button", "开始上课"))          # 命名不规范，缺少 desc
+start_class = Element("role", ("button", "开始上课"), desc="开始上课按钮")  # 命名不规范
+```
+
+### 3.3 iframe 元素处理
+
+录制脚本中 `frame_locator(...).locator(...)` 的操作，需要：
+1. 将 iframe CSS selector 定义为普通字符串常量（不用 Element）
+2. 将 iframe 内的元素用 Element 定义
+3. 操作时通过 `self.frame(IFRAME_CSS)` 获取代理
+
+```python
+# iframe CSS selector — 普通字符串
+CLASSROOM_IFRAME = "iframe"
+
+# iframe 内的元素 — 正常用 Element
+SEND_BUTTON = Element("css", ".send-btn", desc="发送按钮")
+
+# 方法内使用
+def click_send(self):
+    self.frame(self.CLASSROOM_IFRAME).click(self.SEND_BUTTON)
+```
+
+### 3.4 方法定义规范
+
+- 每个用户操作封装为一个方法，方法名用小写下划线
+- 方法只做操作，不做断言
+- 有输入参数的操作（fill、select）通过方法参数传入，不硬编码
+- 使用 BasePage 提供的方法，不直接调用 `self.page.xxx`
+
+```python
+# ✅ 正确
+def fill_username(self, username: str):
+    self.fill(self.USERNAME_INPUT, username)
+
+def click_login(self):
+    self.click(self.LOGIN_BUTTON)
+
+# ❌ 错误 — 直接调用 page，绕过框架
+def click_login(self):
+    self.page.get_by_role("button", name="登录").click()
+```
+
+**BasePage 可用方法速查：**
+
+| 操作 | 方法 |
+|---|---|
+| 点击 | `self.click(element)` |
+| 填写输入框 | `self.fill(element, text)` |
+| 获取文本 | `self.get_text(element)` |
+| 等待元素出现 | `self.wait_for_selector(element, timeout=xxx)` |
+| 判断是否可见 | `self.is_visible(element)` |
+| 导航 | `self.navigate(url)` |
+| 双击 | `self.double_click(element)` |
+| 右键 | `self.right_click(element)` |
+| 悬停 | `self.hover(element)` |
+| 勾选 | `self.check(element)` |
+| 取消勾选 | `self.uncheck(element)` |
+| 原生 select | `self.select_option(element, value/label/index)` |
+| 自定义下拉 | `self.click_select_option(trigger, option, text)` |
+| 获取属性 | `self.get_attribute(element, name)` |
+| 获取输入值 | `self.get_input_value(element)` |
+
+### 3.5 open 方法
+
+每个 Page Object 提供 `open()` 方法导航到对应页面：
+
+```python
+def open(self):
+    self.navigate(BASE_URL)
+```
+
+---
+
+## 四、测试用例转换规则（tests 层）
+
+### 4.1 文件结构
+
+```python
+import allure
+from playwright.sync_api import Page
+from pages.modules.<模块名>.<模块名>_page import <模块名>Page
+from utils.data_loader import DataLoader
+from utils.assertion import Assertion
+
+assertion = Assertion("<模块名>Test")
+
+
+@allure.feature("<功能模块名>")
+class Test<模块名>:
+
+    @allure.story("<子功能>")
+    @allure.title("<测试标题>")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_<场景名>(self, authenticated_page: Page):
+        ...
+```
+
+### 4.2 fixture 选择
+
+| 场景 | fixture |
+|---|---|
+| 需要登录 | `authenticated_page: Page` |
+| 不需要登录 | `page: Page` |
+| 需要进课堂（Aixmy） | `authenticated_page: Page, end_class` |
+
+### 4.3 测试数据
+
+- 所有测试输入值（用户名、密码、搜索词等）从 YAML 加载，不硬编码在测试代码里
+- 路径相对于 `test_data/` 目录
+
+```python
+# ✅ 正确
+data = DataLoader.get_test_data("login/login_data.yaml", "valid_user")
+login_page.fill_username(data["username"])
+
+# ❌ 错误 — 硬编码
+login_page.fill_username("admin123")
+```
+
+### 4.4 断言规范
+
+- 必须使用 `Assertion` 类，禁止使用原生 `assert`
+- 断言方法签名：`assertion.assert_xxx(page_obj, element, message)`
+- iframe 内断言：先获取 frame，再传给断言方法
+
+```python
+# ✅ 普通断言
+assertion.assert_is_display(page_obj, page_obj.SUCCESS_TEXT, "登录成功提示可见")
+assertion.assert_contains_text(page_obj, page_obj.TITLE, "首页", "页面标题包含'首页'")
+
+# ✅ iframe 内断言
+classroom = aixmy_page.get_classroom_frame()
+assertion.assert_is_display(classroom, aixmy_page.RESULT_IMAGE, "图片生成结果可见")
+
+# ❌ 错误
+assert page.locator(".success").is_visible()
+```
+
+**Assertion 方法速查：**
+
+| 方法 | 用途 |
+|---|---|
+| `assert_is_display(page_obj, element, msg)` | 元素可见 |
+| `assert_not_display(page_obj, element, msg)` | 元素不可见 |
+| `assert_has_text(page_obj, element, text, msg)` | 文本完全匹配 |
+| `assert_contains_text(page_obj, element, text, msg)` | 文本包含 |
+| `assert_not_has_text(page_obj, element, text, msg)` | 文本不匹配 |
+| `assert_has_value(page_obj, element, value, msg)` | 输入框值匹配 |
+| `assert_is_checked(page_obj, element, msg)` | 复选框选中 |
+| `assert_is_unchecked(page_obj, element, msg)` | 复选框未选中 |
+| `assert_has_css(page_obj, element, prop, value, msg)` | CSS 属性值 |
+| `assert_has_class(page_obj, element, pattern, msg)` | CSS class |
+| `assert_has_url(page, url_pattern, msg)` | 页面 URL |
+
+### 4.5 Allure 装饰器
+
+每个测试方法必须有：
+- `@allure.story()` — 子功能
+- `@allure.title()` — 测试标题
+- `@allure.severity()` — 严重程度
+
+severity 参考：
+- `CRITICAL` — 核心主流程
+- `NORMAL` — 普通功能
+- `MINOR` — 边界/异常场景
+
+### 4.6 end_class fixture（Aixmy 进课堂场景）
+
+凡是调用了 `launch_courseware()` 的测试，必须声明 `end_class` 并在进入课堂后立即注册：
+
+```python
+def test_xxx(self, authenticated_page: Page, end_class):
+    aixmy_page = AixmyPage(authenticated_page)
+    aixmy_page.open()
+    aixmy_page.launch_courseware()
+    end_class(aixmy_page)   # 必须在 launch_courseware 之后立即注册
+    # ... 后续测试步骤
+```
+
+---
+
+## 五、测试数据规则（test_data 层）
+
+### 5.1 文件格式
+
+YAML 文件，按测试场景分组，key 对应 `DataLoader.get_test_data` 的第二个参数：
+
+```yaml
+# test_data/login/login_data.yaml
+
+valid_user:
+  username: "admin"
+  password: "123456"
+
+invalid_password:
+  username: "admin"
+  password: "wrong"
+```
+
+### 5.2 哪些值放进 YAML
+
+- 用户输入的文本（用户名、密码、搜索词、提示词等）
+- 期望的结果文本（如果断言用到）
+- 可变的配置值（超时时间、数量等）
+
+不需要放进 YAML 的：
+- 元素定位器
+- 固定的 URL（用 `BASE_URL`）
+- 操作步骤逻辑
+
+---
+
+## 六、完整转换示例
+
+### 录制脚本（输入）
+
+```python
+page.goto("https://aixmy.miaobi.cn/#/home/profile")
+page.get_by_role("button", name="开始上课").click()
+page.locator(".work-item > .work-thumbnail").first.click()
+page.get_by_role("button", name="启动课件，开始上课").click()
+page.get_by_role("button", name="自动生成房间号").click()
+page.wait_for_timeout(1000)
+page.get_by_role("button", name="立即进入").click()
+page.wait_for_timeout(5000)
+page.frame_locator("iframe").get_by_text("文生图").click()
+page.frame_locator("iframe").locator(".message-input-container-h5-center [contenteditable='true']").fill("老虎")
+page.frame_locator("iframe").locator(".message-input-button-send-btn").click()
+```
+
+### 转换结果
+
+**`pages/modules/aixmy/aixmy_page.py`（pages 层）**
+
+```python
+import re
+from pages.base_page import BasePage
+from utils.element import Element
+from config.config import BASE_URL
+
+
+class AixmyPage(BasePage):
+
+    START_CLASS_BUTTON = Element("role", ("button", "开始上课"), desc="开始上课按钮")
+    FIRST_WORK_THUMBNAIL = Element("css", ".work-item > .work-thumbnail", desc="第一个课件缩略图", first=True)
+    LAUNCH_COURSEWARE_BUTTON = Element("role", ("button", "启动课件，开始上课"), desc="启动课件按钮")
+    AUTO_ROOM_NUMBER_BUTTON = Element("role", ("button", "自动生成房间号"), desc="自动生成房间号按钮")
+    ENTER_ROOM_BUTTON = Element("role", ("button", "立即进入"), desc="立即进入按钮")
+
+    WENTU_TOOL = Element("text", "文生图", exact=True, desc="文生图工具入口",
+                         filter_params={"has_text": re.compile(r"^文生图$")}, first=True)
+    EDITOR_INPUT = Element("css", ".message-input-container-h5-center [contenteditable='true']", desc="提示词输入框")
+    SEND_BUTTON = Element("css", ".message-input-button-send-btn", desc="发送按钮")
+    REGENERATE_BUTTON = Element("text", "重新生成", desc="重新生成按钮")
+
+    CLASSROOM_IFRAME = "iframe"   # iframe selector — 普通字符串，不用 Element
+
+    def __init__(self, page):
+        super().__init__(page)
+
+    def open(self):
+        self.navigate(BASE_URL)
+
+    def click_start_class(self):
+        self.click(self.START_CLASS_BUTTON)
+
+    def click_first_work(self):
+        self.click(self.FIRST_WORK_THUMBNAIL)
+
+    def launch_courseware(self):
+        self.click(self.LAUNCH_COURSEWARE_BUTTON)
+        self.click(self.AUTO_ROOM_NUMBER_BUTTON)
+        self.page.wait_for_timeout(1000)
+        self.click(self.ENTER_ROOM_BUTTON)
+        self.page.wait_for_timeout(5000)
+
+    def get_classroom_frame(self):
+        return self.frame(self.CLASSROOM_IFRAME)
+
+    def send_wentu_prompt(self, prompt_text: str):
+        classroom = self.get_classroom_frame()
+        classroom.click(self.WENTU_TOOL)
+        self.page.wait_for_timeout(1000)
+        classroom.fill(self.EDITOR_INPUT, prompt_text)
+        classroom.click(self.SEND_BUTTON)
+```
+
+**`tests/aixmy/test_aixmy.py`（tests 层）**
+
+```python
+import allure
+from playwright.sync_api import Page
+from pages.modules.aixmy.aixmy_page import AixmyPage
+from utils.data_loader import DataLoader
+from utils.assertion import Assertion
+
+assertion = Assertion("TestAixmy")
+
+
+@allure.feature("Aixmy 平台")
+class TestAixmy:
+
+    @allure.story("文生图")
+    @allure.title("进入课堂后使用文生图功能")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_wentu_in_classroom(self, authenticated_page: Page, end_class):
+        data = DataLoader.get_test_data("aixmy/aixmy_data.yaml", "wentu_test")
+        aixmy_page = AixmyPage(authenticated_page)
+
+        aixmy_page.open()
+        aixmy_page.click_start_class()
+        aixmy_page.click_first_work()
+        aixmy_page.launch_courseware()
+        end_class(aixmy_page)
+
+        aixmy_page.send_wentu_prompt(data["prompt_text"])
+
+        classroom = aixmy_page.get_classroom_frame()
+        classroom.wait_for_selector(aixmy_page.REGENERATE_BUTTON, timeout=60000)
+        assertion.assert_is_display(classroom, aixmy_page.REGENERATE_BUTTON, "文生图生成完成，重新生成按钮可见")
+```
+
+**`test_data/aixmy/aixmy_data.yaml`（data 层）**
+
+```yaml
+wentu_test:
+  prompt_text: "老虎"
+```
+
+---
+
+## 七、常见错误速查
+
+| 错误写法 | 正确写法 |
+|---|---|
+| `self.page.get_by_role(...).click()` | `self.click(self.ELEMENT)` |
+| `assert element.is_visible()` | `assertion.assert_is_display(page_obj, element, msg)` |
+| `Element("role", ("button", "登录"))` 缺 desc | 加上 `desc="登录按钮"` |
+| 测试方法内硬编码 `"admin123"` | 从 YAML 加载 `data["username"]` |
+| iframe 内用 `page.frame_locator(...).locator(...)` | `self.frame(IFRAME_CSS).click(ELEMENT)` |
+| 元素命名 `loginBtn` | 改为 `LOGIN_BUTTON` |
+| 直接 `import` page object 但不继承 BasePage | 必须继承 `BasePage` |
+| 在 `launch_courseware` 之后才注册 `end_class` 但中间有可能失败的步骤 | `launch_courseware()` 后立即调用 `end_class(page_obj)` |
