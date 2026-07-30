@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from playwright.sync_api import Page
 from config.config import TIMEOUT
 from utils.logger import Logger
@@ -9,6 +11,9 @@ from pages.mixins.window_mixin import WindowMixin
 from pages.mixins.navigation_mixin import NavigationMixin
 from pages.mixins.dialog_mixin import DialogMixin
 from pages.mixins.drag_mixin import DragMixin
+
+if TYPE_CHECKING:
+    from pages.frame_context import FrameContext
 
 
 class BasePage(LocatorMixin, ActionMixin, SelectMixin, FileMixin,
